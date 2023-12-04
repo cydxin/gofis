@@ -14,15 +14,15 @@ func wsRequest(req []byte, client *Client) {
 		}
 	}()
 
-	if req[0] == 52 && req[1] == 50 { //ASSII
+	if req[0] == 52 && req[1] == 50 { //ASCII
 		reqMap := make(map[string]interface{}) //搞个map类型
 		err := json.Unmarshal(req[2:], &reqMap)
 		if err != nil {
 			client.sendMsg([]byte("转换错误，数据格式不对"))
 			return
 		}
-		event, okevent := reqMap["event"].(string)
-		if !okevent {
+		event, okEvent := reqMap["event"].(string)
+		if !okEvent {
 			client.sendMsg([]byte("没有定义事件"))
 			return
 		}

@@ -78,8 +78,8 @@ func handRoomRun(room *Room) {
 			room.AllPlayersReady = true
 			//开始鱼数据实时状态和数据的发送
 			//go handFishInit(room)      //鱼群初始化数据
-			go closeRoomTimer(room, 5) //定义定时器关闭，其实可以直接放置在handFishrun
-			go handFishrun(room)
+			go closeRoomTimer(room, 5) //定义定时器关闭，其实可以直接放置在handFish run
+			go handFishRun(room)
 			break
 		}
 	}

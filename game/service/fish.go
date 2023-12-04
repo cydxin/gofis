@@ -62,8 +62,8 @@ func handFishInit(room *Room) {
 	printFishGroupJSON(room)
 }
 
-// handFishrun 处理鱼的运动 也是主流程
-func handFishrun(room *Room) {
+// handFish run 处理鱼的运动 也是主流程
+func handFishRun(room *Room) {
 	fmt.Print("鱼群开始 \n")
 
 	buildNormalFishTicker := time.NewTicker(time.Second * 20)          //刷普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
@@ -147,7 +147,8 @@ func addFish(room *Room, num int) {
 		room.FishGroup[startIndex+i] = newFish
 
 		// 随机确定起始边界
-		//startEdge := rand.Intn(4)
+		startEdge := rand.Intn(4)
+		print(startEdge)
 		//	y1080								y1080
 		//	_____________________________________x 1920
 		//	|									|
