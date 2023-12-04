@@ -30,24 +30,29 @@ type Room struct {
 	IsClose         bool            // 布尔类型的变量，用于表示房间是否关闭
 	CloseChan       chan bool       // 通道，用于进行信号通知，比如关闭房间
 	Players         map[int]*Client // 使用map存储玩家信息，以玩家ID作为键
-	FishGroup       []*Fish
+	FishGroup       map[int]*Fish
 	mutex           sync.Mutex
+	fishMutex       sync.Mutex
 }
 
 // EnterRoom 进入房间逻辑
 func EnterRoom(roomNum int, client *Client) {
 	room := getOrCreateRoom(roomNum)
+	//获取完room后上roomMutex锁 确保一个时间内只有一个协程可以操作房间等待列表的创建与获取
+	roomMutex.Lock()
+	//room锁
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
 	fmt.Print("EnterRoom \n")
 	room.Players[int(client.UserInfo.UserId)] = client
 	//等待handFishInit完成
-	handFishInit(room)
-	printFishGroupJSON(room)
+
 	if len(room.Players) == roomNum { // 人满了 开始游戏！！！
 		//delete(roomWait, roomNum) // 把当前等待房间移除
 		roomWait[roomNum] = nil
-		room.Status = 1 // 标记为游戏中状态
+		roomMutex.Unlock()    //释放锁 没必要到结束再释放
+		room.Status = 1       // 标记为游戏中状态
+		go handFishInit(room) //todo: 已经把锁去除 后续有问题可以加上
 		fmt.Print("人满了 开!!! \n")
 		go handRoomRun(room)
 	}
@@ -56,7 +61,6 @@ func handRoomRun(room *Room) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
 	// 需要让玩家发送一个ready表示可以开始加载数据  todo:改为chan传输 不做循环处理
-
 	fmt.Print("开始判断玩家是否可以接收数据")
 	for !room.AllPlayersReady {
 		allReady := true
@@ -117,9 +121,8 @@ func closeRoomTimer(room *Room, min int) {
 func closeRoom(room *Room) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
-
 	//结算 妈的 写个统一给房间发送信息 的 方法
-	room.sendMsgAllPlayer()
+	room.sendMsgAllPlayer("计算了")
 }
 
 // 使用 interface实现自定义

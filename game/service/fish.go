@@ -37,31 +37,37 @@ type Fish struct {
 
 // 房间游戏前，或玩家加载游戏资源时就可以提前加载的方法
 func handFishInit(room *Room) {
+	room.fishMutex.Lock()
 	fmt.Print("进入handFishInit \n")
 	// 初始化 FishGroup 切片
-	room.FishGroup = make([]*Fish, 50)
+	//room.FishGroup = make([]*Fish, 20)//便捷删除 不再使用切片
 
 	// 为每个元素分配一个新的 Fish 对象
-	for i := 0; i < 50; i++ {
+	//todo:多边出鱼 参考addFish
+	for i := 0; i < 20; i++ {
 		randomFishKindKey := rand.Intn(len(fishKinds))
+		currentY := rand.Intn(maxY)
+
 		room.FishGroup[i] = &Fish{
 			FishId:      i + 1,
 			FishKind:    randomFishKindKey,
-			OffsetX:     rand.Intn(maxY),
-			OffsetY:     0,
-			CurrentX:    rand.Intn(maxY),
-			CurrentY:    0,
+			OffsetX:     0,
+			OffsetY:     currentY,
+			CurrentX:    0,
+			CurrentY:    currentY,
 			ToBeDeleted: false,
 		}
 	}
+	room.fishMutex.Unlock()
+	printFishGroupJSON(room)
 }
 
 // handFishrun 处理鱼的运动 也是主流程
 func handFishrun(room *Room) {
 	fmt.Print("鱼群开始 \n")
 
-	//buildNormalFishTicker := time.NewTicker(time.Second * 20)          //刷普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
-	//flushTimeOutFishTicker := time.NewTicker(time.Second * 5)          //清理死鱼
+	buildNormalFishTicker := time.NewTicker(time.Second * 20)          //刷普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
+	flushTimeOutFishTicker := time.NewTicker(time.Second * 5)          //清理走出屏幕的鱼和被捕捉的鱼
 	UpdateFishTracksTicker := time.NewTicker(10000 * time.Millisecond) //鱼足迹
 	//defer buildNormalFishTicker.Stop()
 	//defer flushTimeOutFishTicker.Stop()
@@ -73,26 +79,22 @@ func handFishrun(room *Room) {
 			closeRoom(room)
 			fmt.Printf("房价结束\n")
 			return
-		//case <-buildNormalFishTicker.C:
-		//	fmt.Printf("驾驭\n")
-		//
-		//	addFish(room, 2)
-		//case <-flushTimeOutFishTicker.C:
-		//	fmt.Printf("删除鱼\n")
-		//
-		//	removeFish(room)
+		case <-buildNormalFishTicker.C:
+			fmt.Printf("驾驭\n")
+			addFish(room, 2)
+		case <-flushTimeOutFishTicker.C:
+			fmt.Printf("删除鱼\n")
+			removeFish(room)
 		case <-UpdateFishTracksTicker.C:
 			// 循环处理所有鱼的位置更新
 			fmt.Print("循环处理所有鱼的位置更新 \n")
-
 			room.mutex.Lock()
 			printFishGroupJSON(room)
-			var fishData []interface{}
 			for _, fish := range room.FishGroup {
 				// 随机生成偏移量
 				speed := fishKinds[fish.FishKind].Speed
 
-				if fish.CurrentX > maxX || fish.CurrentY > maxY { //走出去的鱼不管了,同时删除
+				if fish.CurrentX > maxX || fish.CurrentY > maxY { //走出去的鱼不管了,同时标记
 					fish.ToBeDeleted = true
 					continue
 				}
@@ -100,19 +102,17 @@ func handFishrun(room *Room) {
 				fish.OffsetY = speed - fish.OffsetX
 				fish.CurrentX += fish.OffsetX
 				fish.CurrentY += fish.OffsetY
-				// 将 Fish 对象转换为 JSON 格式的字节切片，并追加到结果切片中
-				fishJSON, err := json.Marshal(fish)
-				if err != nil {
-					// 处理转换为 JSON 失败的情况
-					fmt.Println("Error marshalling fish:", err)
-					continue
-				}
-				fishData = append(fishData, fishJSON) //切片
-
 			}
 			room.mutex.Unlock()
 			// 发送给房间内的玩家们
-			room.sendMsgAllPlayer(fishData)
+			fishGroupJSON, err := json.MarshalIndent(room.FishGroup, "", "    ")
+			if err != nil {
+				fmt.Println("Error marshalling FishGroup to JSON:", err)
+				return
+			}
+			// 发送 JSON 数据到房间中的所有玩家
+			room.sendMsgAllPlayer(fishGroupJSON)
+
 		default:
 		}
 	}
@@ -120,18 +120,19 @@ func handFishrun(room *Room) {
 
 func removeFish(room *Room) {
 	// 保留未标记为删除的元素
-	room.mutex.Lock()
-	defer room.mutex.Unlock()
-	var newFishGroup []*Fish
-	for _, fish := range room.FishGroup {
+	room.fishMutex.Lock()
+	defer room.fishMutex.Unlock()
+	for key, fish := range room.FishGroup {
 		if fish.ToBeDeleted {
-			newFishGroup = append(newFishGroup, fish)
+			delete(room.FishGroup, key)
 		}
 	}
-	room.FishGroup = newFishGroup
 }
 func addFish(room *Room, num int) {
 	fmt.Print("添加鱼的数据 \n")
+	room.fishMutex.Lock()
+	defer room.fishMutex.Unlock()
+	startIndex := len(room.FishGroup) + 1
 	for i := 0; i <= num; i++ {
 		randomFishKindKey := rand.Intn(len(fishKinds))
 		newFish := &Fish{
@@ -143,7 +144,7 @@ func addFish(room *Room, num int) {
 			CurrentY:    0,
 			ToBeDeleted: false,
 		}
-		room.FishGroup = append(room.FishGroup, newFish)
+		room.FishGroup[startIndex+i] = newFish
 
 		// 随机确定起始边界
 		//startEdge := rand.Intn(4)

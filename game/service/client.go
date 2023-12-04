@@ -47,12 +47,12 @@ type UserInfo struct {
 	Balance     float64 `json:"balance"` //余额
 	Name        string  `json:"name"`
 	NickName    string  `json:"nick_name"`
-	Ready       bool    `json:"ready"`      // 游戏是否准备好，即游戏加载ok，所有room内的userinfo的都true后，开始给捕鱼数据
+	Ready       bool    `json:"ready"`      // 游戏是否准备好，即游戏加载ok，所有room内的userinfo的都true后，开始给捕鱼数据  使用client的
 	SeatIndex   int     `json:"seatIndex"`  // 座位，从左到右 从上到下 按进入房间顺序给
 	BulletLevel int     `json:"cannonKind"` // 子弹等级
 	Power       float64 `json:"power"`      // 额外概率
 	Online      bool    `json:"online"`     // 离线
-	client      *Client `json:"-"`
+	//client      *Client `json:"-"`
 }
 
 type BulletId string
