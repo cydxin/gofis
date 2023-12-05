@@ -79,6 +79,8 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 		fmt.Println("转换为 JSON 出错:", err)
 		return
 	}
+
+	userInfoJSON = append([]byte{'4', '1'}, userInfoJSON...)
 	client.sendMsg(userInfoJSON)
 }
 
@@ -110,7 +112,7 @@ func handleRequest(reqMap map[string]interface{}, client *Client) {
 			break
 		case "ready":
 			client.IsReady = true
-			fmt.Printf("client准备 %v\n", client)
+			//fmt.Printf("client准备 %v\n", client)
 
 			client.sendMsg([]byte("收到了你的准备"))
 			break
@@ -118,8 +120,20 @@ func handleRequest(reqMap map[string]interface{}, client *Client) {
 			if len(reqMap) < 2 {
 				return
 			}
+			fmt.Printf("reqmap格式 %v\n", reqMap)
+			BulletIdFloat64, errBulletId := reqMap["BulletId"].(float64)
+			FishIdFloat64, errFishId := reqMap["FishId"].(float64)
+			if !errBulletId || !errFishId {
+				fmt.Printf("错误参数:\n errBulletId:%v ; errFishId:%v \n", errBulletId, errFishId)
+			}
+			bulletId := BulletId(BulletIdFloat64)
+			fishId := FishId(FishIdFloat64)
+			catchFishReq := catchFishReq{
+				BulletId: bulletId, // 使用类型断言将值转换为 BulletId 类型
+				FishId:   fishId,   // 使用类型断言将值转换为 FishId 类型
+			}
+			client.catchFish(catchFishReq.FishId, catchFishReq.BulletId)
 			break
-
 		}
 	}
 }

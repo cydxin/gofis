@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/astaxie/beego/logs"
 	"sync"
 	"time"
 )
@@ -27,33 +28,29 @@ type Room struct {
 	MaxPlayers      int
 	AllPlayersReady bool
 	IsReady         bool
-	IsClose         bool            // 布尔类型的变量，用于表示房间是否关闭
-	CloseChan       chan bool       // 通道，用于进行信号通知，比如关闭房间
-	Players         map[int]*Client // 使用map存储玩家信息，以玩家ID作为键
-	FishGroup       map[int]*Fish
+	IsClose         bool             // 布尔类型的变量，用于表示房间是否关闭
+	CloseChan       chan bool        // 通道，用于进行信号通知，比如关闭房间
+	Players         map[int]*Client  // 使用map存储玩家信息，以玩家ID作为键
+	FishGroup       map[FishId]*Fish // 使用map存储鱼，以鱼ID作为键  todo:换回切片
 	mutex           sync.Mutex
 	fishMutex       sync.Mutex
 }
 
 // EnterRoom 进入房间逻辑
 func EnterRoom(roomNum int, client *Client) {
-	room := getOrCreateRoom(roomNum)
-	//获取完room后上roomMutex锁 确保一个时间内只有一个协程可以操作房间等待列表的创建与获取
+	//使用roomMutex 确保getOrCreateRoom的唯一性 不会被同时操作
 	roomMutex.Lock()
-	//room锁
-	room.mutex.Lock()
-	defer room.mutex.Unlock()
-	fmt.Print("EnterRoom \n")
+	room := getOrCreateRoom(roomNum)
+	defer roomMutex.Unlock()
 	room.Players[int(client.UserInfo.UserId)] = client
+	client.Room = room
+	room.broadcast([]interface{}{"newJoin", map[string]interface{}{"userInfo": client.UserInfo}})
 	//等待handFishInit完成
-
 	if len(room.Players) == roomNum { // 人满了 开始游戏！！！
-		//delete(roomWait, roomNum) // 把当前等待房间移除
 		roomWait[roomNum] = nil
-		roomMutex.Unlock()    //释放锁 没必要到结束再释放
 		room.Status = 1       // 标记为游戏中状态
 		go handFishInit(room) //todo: 已经把锁去除 后续有问题可以加上
-		fmt.Print("人满了 开!!! \n")
+		room.broadcast([]interface{}{"message", map[string]interface{}{"message": "等待其他玩家资源加载就绪"}})
 		go handRoomRun(room)
 	}
 }
@@ -61,21 +58,21 @@ func handRoomRun(room *Room) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
 	// 需要让玩家发送一个ready表示可以开始加载数据  todo:改为chan传输 不做循环处理
-	fmt.Print("开始判断玩家是否可以接收数据")
+	fmt.Print("等待全部玩家准备\n")
 	for !room.AllPlayersReady {
 		allReady := true
 		for _, client := range room.Players {
 			// 所有玩家进入游戏 加载资源后 再开始发送鱼的数据，
 			//或许我可以先准备资源，而不是等玩家满了再准备
 			if !client.IsReady {
-				//fmt.Printf("玩家 %v 没有准备 \n", client.UserInfo.Name)
 				allReady = false
 				break
 			}
 		}
 		if allReady {
-			fmt.Print("玩家可以接收数据")
-			room.AllPlayersReady = true
+			// 发送给前端
+			room.broadcast([]interface{}{"message", map[string]interface{}{"message": "开始推送"}})
+			room.AllPlayersReady = allReady
 			//开始鱼数据实时状态和数据的发送
 			//go handFishInit(room)      //鱼群初始化数据
 			go closeRoomTimer(room, 5) //定义定时器关闭，其实可以直接放置在handFish run
@@ -85,8 +82,6 @@ func handRoomRun(room *Room) {
 	}
 }
 func getOrCreateRoom(roomNum int) *Room {
-	roomMutex.Lock()
-	defer roomMutex.Unlock()
 	room := roomWait[roomNum]
 	if room == nil {
 		nextRoomID++
@@ -117,12 +112,21 @@ func closeRoomTimer(room *Room, min int) {
 		timer.Stop()
 	}
 }
-
 func closeRoom(room *Room) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
 	//结算 妈的 写个统一给房间发送信息 的 方法
-	room.sendMsgAllPlayer("计算了")
+	closeRoom := []interface{}{"closeRoom", map[string]interface{}{
+		"message":  "时间到",
+		"integral": "10000分",
+		"rank":     "第一名",
+	}}
+	for _, client := range room.Players {
+		client.IsReady = false
+	}
+	// 发送给前端
+	room.broadcast(closeRoom)
+	close(room.CloseChan) //防止意外的没有关闭
 }
 
 // 使用 interface实现自定义
@@ -143,13 +147,29 @@ func (room *Room) sendMsgAllPlayer(messages ...interface{}) {
 		client.sendMsg(byteMessages)
 	}
 }
-func printFishGroupJSON(room *Room) {
-	fishGroupJSON, err := json.MarshalIndent(room.FishGroup, "", "    ")
-	if err != nil {
-		fmt.Println("Error marshalling FishGroup to JSON:", err)
-		return
-	}
 
-	fmt.Println("FishGroup JSON:")
-	fmt.Println(string(fishGroupJSON))
+func (room *Room) broadcastFishLocation() {
+	FishReady := []interface{}{"fishLocation", room.FishGroup}
+	// 发送给前端
+	room.broadcast(FishReady)
+}
+func (room *Room) broadcastFishReady() {
+	FishReady := []interface{}{"message",
+		map[string]interface{}{
+			"message": "鱼群就绪",
+		}}
+	// 发送给前端
+	room.broadcast(FishReady)
+}
+func (room *Room) broadcast(data []interface{}) {
+	if dataByte, err := json.Marshal(data); err != nil {
+		logs.Error("broadcast [%v] json marshal err :%v ", data, err)
+	} else {
+		dataByte = append([]byte{'4', '2'}, dataByte...)
+		for _, client := range room.Players {
+			if client.UserInfo.UserId > 0 {
+				client.sendMsg(dataByte)
+			}
+		}
+	}
 }

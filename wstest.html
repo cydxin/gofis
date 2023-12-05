@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Example</title>
+</head>
+<body>
+<h1>WebSocket Example</h1>
+<input type="text" id="messageid" placeholder="输入id">
+<button onclick="connect()">连接</button>
+<br>
+<br>
+<input type="number" id="reid" placeholder="接收人id">
+<br>
+<br>
+账号：<select id="phoneInput">
+    <option value="15707830445">15707830445</option>
+    <option value="18904506650">18904506650</option>
+    <option value="18904506650">18904506650</option>
+    <option value="14945822170">14945822170</option>
+    <option value="14836966010">14836966010</option>
+    <option value="16306863343">16306863343</option>
+    <option value="16587054044">16587054044</option>
+    <option value="16372000022">16372000022</option>
+    <option value="18164359728">18164359728</option>
+    <option value="19546757177">19546757177</option>
+    <option value="19994906377">19994906377</option>
+    <option value="18981208916">18981208916</option>
+</select>
+<button onclick="sendMessage()">登录</button>
+<button onclick="pk()">PK记录</button>
+<button onclick="match()">比赛记录</button>
+<button onclick="exp()">体验场记录</button>
+<input type="number" style="width:100px;height:30px;" id="numinput" placeholder="输入场次" value="2">
+<button onclick="enter()">进入场次</button>
+<button onclick="ready()">准备ok</button><br>
+<input type="text" style="width:100px;height:30px;" id="fishid" placeholder="鱼id" value="2">
+<input type="text" style="width:100px;height:30px;" id="bullid" placeholder="炮等级" value="2">
+<button onclick="shot()">开炮</button><br>
+
+<button onclick="disconnect()">断开连接</button><br>
+<br>
+<div id="messageDisplay" style="overflow: auto; height: 500px;width: 1000px;"></div>
+
+<script>
+    const phoneInput = document.getElementById('phoneInput');
+    const numinput = document.getElementById('numinput');
+    const messageid = document.getElementById('messageid');
+    const reid = document.getElementById('reid');
+    const messageDisplay = document.getElementById('messageDisplay');
+    const fishid = document.getElementById('fishid');
+    const bullid = document.getElementById('bullid');
+    let websocket;
+
+    // 连接到 WebSocket 服务器
+    function connect() {
+        const id = messageid.value;
+        if (!id) {
+           alert("选择用户");
+        }
+        messageid.disabled = true;
+        // const serverUrl = 'ws://192.168.1.228:1215?id=' + id; // 替换成您的 WebSocket 服务器 URL
+        const serverUrl = 'ws://127.0.0.1:5000/socket.io/'; // 替换成您的 WebSocket 服务器 URL
+        websocket = new WebSocket(serverUrl);
+
+        // 添加事件处理程序
+        websocket.onopen = (event) => {
+            console.log('WebSocket 已连接');
+        };
+
+        websocket.onmessage = (event) => {
+            const message = event.data;
+            displayMessage(message);
+        };
+
+        websocket.onclose = (event) => {
+            messageid.disabled = false;
+            console.log('WebSocket 已关闭');
+        };
+
+        websocket.onerror = (event) => {
+            console.error('WebSocket 错误:', event);
+        };
+    }
+
+    // 发送消息
+    function sendMessage() {
+        const phone = phoneInput.value;
+        const dataToSend = {
+            event: 'login',
+            account: phone,
+            password: '123123123'
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
+    function pk() {
+        const dataToSend = {
+            event: 'pkRecord',
+            account: '15707830445',
+            password: '123123123'
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
+    function match() {
+        const message = messageInput.value;
+        const dataToSend = {
+            event: 'login',
+            account: '15707830445',
+            password: '123123123'
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
+    function exp() {
+        const message = messageInput.value;
+        const dataToSend = {
+            event: 'login',
+            account: '15707830445',
+            password: '123123123'
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
+    function enter() {
+        let num = numinput.value;
+        if(!num){
+            num = 1
+        }
+        const dataToSend = {
+            event: 'enterRoom',
+            roomNum: parseFloat(num),
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }    // 发送消息
+    function ready() {
+        const dataToSend = {
+            event: 'ready',
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
+
+    function shot() {
+        if (!fishid.value || !bullid.value) {
+            alert("选择鱼id和炮");
+            return false
+        }
+        const dataToSend = {
+            event: 'catch_fish',
+            FishId: parseFloat(fishid.value),
+            BulletId: parseFloat(bullid.value),
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
+
+
+    // 断开连接
+    function disconnect() {
+        if (websocket) {
+            websocket.close();
+            websocket = null;
+        }
+    }
+
+    // 在页面上显示消息
+    function displayMessage(message) {
+        const messageElement = document.createElement('div');
+        messageElement.textContent = message;
+        messageDisplay.appendChild(messageElement);
+    }
+
+    // 连接到 WebSocket 服务器
+
+
+
+</script>
+</body>
+</html>

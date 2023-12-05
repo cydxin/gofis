@@ -31,6 +31,7 @@ var upgrader = websocket.Upgrader{
 type Client struct {
 	conn      *websocket.Conn
 	UserInfo  *UserInfo
+	Room      *Room
 	inChan    chan []byte
 	outChan   chan []byte
 	IsReady   bool
@@ -42,12 +43,12 @@ type Client struct {
 type UserId int64
 
 type UserInfo struct {
-	UserId      UserId  `json:"userId"`
-	Score       int     `json:"-"`       //对局时的积分
-	Balance     float64 `json:"balance"` //余额
-	Name        string  `json:"name"`
-	NickName    string  `json:"nick_name"`
-	Ready       bool    `json:"ready"`      // 游戏是否准备好，即游戏加载ok，所有room内的userinfo的都true后，开始给捕鱼数据  使用client的
+	UserId   UserId  `json:"userId"`
+	Score    int     `json:"-"`       //对局时的积分
+	Balance  float64 `json:"balance"` //余额
+	Name     string  `json:"name"`
+	NickName string  `json:"nick_name"`
+	//Ready       bool    `json:"ready"`      // 游戏是否准备好，即游戏加载ok，所有room内的userinfo的都true后，开始给捕鱼数据  使用client的
 	SeatIndex   int     `json:"seatIndex"`  // 座位，从左到右 从上到下 按进入房间顺序给
 	BulletLevel int     `json:"cannonKind"` // 子弹等级
 	Power       float64 `json:"power"`      // 额外概率
@@ -55,20 +56,11 @@ type UserInfo struct {
 	//client      *Client `json:"-"`
 }
 
-type BulletId string
+type BulletId int
 
-//	type Bullet struct {
-//		UserId     UserId   `json:"userId"`
-//		ChairId    int      `json:"chairId"`
-//		BulletKind int      `json:"bulletKind"`
-//		BulletId   BulletId `json:"bulletId"`
-//		Angle      float64  `json:"angle"`
-//		Sign       string   `json:"sign"`
-//		LockFishId FishId   `json:"lockFishId"`
-//	}
 type catchFishReq struct {
 	BulletId BulletId `json:"bulletId"`
-	FishId   int      `json:"fishId"`
+	FishId   FishId   `json:"fishId"`
 }
 
 func (c *Client) sendMsg(msg []byte) {
@@ -192,10 +184,26 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 		"sid":          sid, //不相关没事
 		"upgrades":     make([]int, 0),
 	}); err != nil {
-		logs.Error("初始化的clent错误 : %v", err)
+		logs.Error("初始化的client错误 : %v", err)
 	} else {
 		//socket.io风格的初始数据
 		client.sendMsg(append([]byte{'0'}, msg...))
 		client.sendMsg(append([]byte{'4', '0'}))
 	}
+}
+func (c *Client) catchFish(fishId FishId, bulletId BulletId) {
+	//计算概率
+	//已使用毫秒触发尝试，同时发送不会出现都返回true，考虑到实际情况更少，不做锁处理
+	c.UserInfo.Score -= int(bulletId)
+	if c.Room.FishGroup[fishId].hitFish(bulletId) {
+		Score := fishKinds[c.Room.FishGroup[fishId].FishKind].Odds
+		c.UserInfo.Score += Score
+		catchResult := []interface{}{"catch_fish_reply",
+			map[string]interface{}{
+				"userId":   c.UserInfo.UserId,
+				"integral": Score,
+			}}
+		c.Room.broadcast(catchResult)
+	}
+
 }

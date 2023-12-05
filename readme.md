@@ -3,30 +3,40 @@
 短项目描述
 
 ## 目录结构
-
+- [common](common)
+  - [conf](common%2Fconf)
+    - [conf.conf](common%2Fconf%2Fconf.conf)
 - [game](./game)
-    - [main](./game/main)
-      - [main.go](./game/main/main.go)
-- [handlers](./src/handlers)
-    - [handler1.go](./src/handlers/handler1.go)
-    - [handler2.go](./src/handlers/handler2.go)
+  - [common](game%2Fcommon)
+    - [config.go](game%2Fcommon%2Fconfig.go)
+  - [controllers](game%2Fcontrollers)
+    - [enter_public_room.go](game%2Fcontrollers%2Fenter_public_room.go)
+  - [main](game%2Fmain)
+    - [config.go](game%2Fmain%2Fconfig.go)
+    - [init.go](game%2Fmain%2Finit.go)
+    - [main.go](game%2Fmain%2Fmain.go)
+  - [router](game%2Frouter)
+    - [router.go](game%2Frouter%2Frouter.go)
+  - [service](game%2Fservice)
+    - [client.go](game%2Fservice%2Fclient.go)
+    - [define.go](game%2Fservice%2Fdefine.go)
+    - [fish.go](game%2Fservice%2Ffish.go)
+    - [fish_utils.go.bak](game%2Fservice%2Ffish_utils.go.bak)
+    - [request.go](game%2Fservice%2Frequest.go)
+    - [room.go](game%2Fservice%2Froom.go)
+- [logs](logs)
 - [models](./src/models)
-    - [model1.go](./src/models/model1.go)
-    - [model2.go](./src/models/model2.go)
-- [templates](./templates)
-    - [index.html](./templates/index.html)
-    - [about.html](./templates/about.html)
-- [README.md](./README.md)
-- [LICENSE](./LICENSE)
-- [CONTRIBUTING.md](./CONTRIBUTING.md)
+    - [user.go](model%2Fuser.go)
+- [readme.md](readme.md)
+- [LICENSE](./LICENSE)(暂时没有)
 
 ## 如何运行
 
 入口文件为game目录下的main.go
 
-## 如何贡献
+## socket.io
+有空写
 
-提供贡献指南，说明如何报告问题、请求功能或参与贡献。
 
 ## 许可证
 

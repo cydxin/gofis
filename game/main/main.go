@@ -26,7 +26,7 @@ func main() {
 		logs.Error("初始化initSec错误： %v", err)
 		return
 	}
-	logs.Debug("initSec 完成")
+	logs.Debug("InitSec 完成")
 
 	addr := fmt.Sprintf("%s:%d", common.GameConf.Host, common.GameConf.Port)
 	fmt.Println("地址", addr)
