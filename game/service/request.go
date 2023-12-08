@@ -31,11 +31,11 @@ func wsRequest(req []byte, client *Client) {
 			return
 		}
 		fmt.Printf("reqMap:%v \n", reqMap)
-		fmt.Printf("UserInfo:%v \n", client.UserInfo)
+		fmt.Printf("UserGameInfo:%v \n", client.UserInfo)
 		if client.UserInfo.UserId == 0 { //ws内无userinfo 说明还是没登录过的,要强制登录
 			if event == "login" {
 				handleLoginRequest(reqMap, client)
-				fmt.Printf("UserInfo:%v \n", client.UserInfo)
+				fmt.Printf("UserGameInfo:%v \n", client.UserInfo)
 			} else {
 				client.sendMsg([]byte("尚未登录，请登录"))
 				logs.Error("未定义的event %v", reqMap["event"])
@@ -66,11 +66,12 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 		return
 	}
 
-	// 设置 client.UserInfo 中的字段
-	client.UserInfo = &UserInfo{
+	// 设置 client.UserGameInfo 中的字段
+	client.UserInfo = &UserGameInfo{
 		UserId:   UserId(userInfo.ID),
 		Name:     userInfo.Account,
 		NickName: userInfo.Nickname,
+		GroupId:  userInfo.GroupID,
 	}
 	client.IsReady = false
 	// TODO: 发送登录成功的消息给客户端

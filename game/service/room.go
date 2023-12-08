@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/astaxie/beego/logs"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -24,7 +25,7 @@ var roomMutex sync.Mutex
 // Room 结构体定义
 type Room struct {
 	ID              int
-	Status          int //房间状态
+	Status          int //房间的状态
 	MaxPlayers      int
 	AllPlayersReady bool
 	IsReady         bool
@@ -32,13 +33,14 @@ type Room struct {
 	CloseChan       chan bool        // 通道，用于进行信号通知，比如关闭房间
 	Players         map[int]*Client  // 使用map存储玩家信息，以玩家ID作为键
 	FishGroup       map[FishId]*Fish // 使用map存储鱼，以鱼ID作为键  todo:换回切片
+	robotAddTicker  *time.Ticker
 	mutex           sync.Mutex
 	fishMutex       sync.Mutex
 }
 
 // EnterRoom 进入房间逻辑
 func EnterRoom(roomNum int, client *Client) {
-	//使用roomMutex 确保getOrCreateRoom的唯一性 不会被同时操作
+	//使用roomMutex 确保getOrCreateRoom的唯一性即 获取房间时的并发是安全的
 	roomMutex.Lock()
 	room := getOrCreateRoom(roomNum)
 	defer roomMutex.Unlock()
@@ -89,16 +91,55 @@ func getOrCreateRoom(roomNum int) *Room {
 
 		// 在创建房间时初始化 CloseChan
 		room = &Room{
-			ID:         roomID,
-			MaxPlayers: roomNum,
-			IsClose:    false,
-			CloseChan:  make(chan bool),
-			Players:    make(map[int]*Client),
+			ID:             roomID,
+			MaxPlayers:     roomNum,
+			IsClose:        false,
+			CloseChan:      make(chan bool),
+			Players:        make(map[int]*Client),
+			robotAddTicker: randomTicker(30*time.Second, 60*time.Second),
 		}
 		rooms[roomID] = room
 		roomWait[roomNum] = room
+
+		// 启动定时添加机器人的协程
+		go func() {
+			for {
+				select {
+				case <-room.robotAddTicker.C:
+					room.mutex.Lock()
+					//先判断人满了没
+					if room.MaxPlayers == len(room.Players) {
+						room.robotAddTicker.Stop()
+						return
+					}
+					addRobotToRoom(room.MaxPlayers)
+					room.robotAddTicker.Stop()
+					room.robotAddTicker = randomTicker(30*time.Second, 60*time.Second)
+					room.mutex.Unlock()
+				case <-room.CloseChan:
+					return
+				}
+			}
+		}()
 	}
 	return room
+}
+
+// 添加机器人到房间
+func addRobotToRoom(roomNum int) {
+	robotClient := &Client{
+		UserInfo: generateRobotUserInfo(),
+	}
+	// 调用 EnterRoom 函数将机器人加入房间
+	EnterRoom(roomNum, robotClient)
+}
+
+// 生成机器人用户信息
+func generateRobotUserInfo() *UserGameInfo {
+	// 实现根据需要生成机器人用户信息的逻辑
+	return &UserGameInfo{
+		UserId: UserId(rand.Intn(500)),
+	}
 }
 func closeRoomTimer(room *Room, min int) {
 	fmt.Print("定时器开始了 \n")
@@ -111,6 +152,13 @@ func closeRoomTimer(room *Room, min int) {
 	case <-room.CloseChan:
 		timer.Stop()
 	}
+}
+
+// 时间范围
+// randomTicker 返回一个随机时间间隔的 Ticker
+func randomTicker(min, max time.Duration) *time.Ticker {
+	interval := time.Duration(rand.Int63n(int64(max-min)) + int64(min))
+	return time.NewTicker(interval)
 }
 func closeRoom(room *Room) {
 	room.mutex.Lock()
@@ -129,6 +177,9 @@ func closeRoom(room *Room) {
 	close(room.CloseChan) //防止意外的没有关闭
 }
 
+// func (robotJoinRoom)  {
+//
+// }
 // 使用 interface实现自定义
 func (room *Room) sendMsgAllPlayer(messages ...interface{}) {
 	var byteMessages []byte //定义一个byte
@@ -171,5 +222,18 @@ func (room *Room) broadcast(data []interface{}) {
 				client.sendMsg(dataByte)
 			}
 		}
+	}
+}
+
+func (room *Room) handRobotRun() {
+	//判断是否有机器人 有的话进行机器人操作
+	robList := make([]*UserGameInfo, 0)
+	for _, client := range room.Players {
+		if client.UserInfo.GroupId == 2 {
+			robList = append(robList, client.UserInfo)
+		}
+	}
+	if len(robList) == 0 {
+		return
 	}
 }

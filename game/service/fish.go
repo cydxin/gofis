@@ -18,10 +18,10 @@ type FishKind struct {
 }
 
 var fishKinds = map[int]FishKind{
-	0: {Speed: 11, Odds: 2, Name: "浪浪鱼"},
-	1: {Speed: 10, Odds: 2, Name: "茂泽鱼"},
-	2: {Speed: 8, Odds: 3, Name: "小兰鱼"},
-	3: {Speed: 6, Odds: 5, Name: "佳丽鱼"},
+	0: {Speed: 110, Odds: 2, Name: "浪浪鱼"},
+	1: {Speed: 100, Odds: 2, Name: "茂泽鱼"},
+	2: {Speed: 80, Odds: 3, Name: "小兰鱼"},
+	3: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
 }
 
 type FishId int
@@ -38,7 +38,7 @@ type Fish struct {
 	Mutex       sync.Mutex
 }
 
-// 房间游戏前，或玩家加载游戏资源时就可以提前加载的方法
+// 房间的游戏前，或玩家加载游戏资源时就可以提前加载的方法
 func handFishInit(room *Room) {
 	room.fishMutex.Lock()
 	fmt.Print("进入handFishInit \n")
@@ -69,13 +69,14 @@ func handFishInit(room *Room) {
 func handFishRun(room *Room) {
 	fmt.Print("鱼群开始 \n")
 
-	buildNormalFishTicker := time.NewTicker(time.Second * 20)        //刷普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
+	buildNormalFishTicker := time.NewTicker(time.Second * 20)        //加普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
 	flushTimeOutFishTicker := time.NewTicker(time.Second * 5)        //清理走出屏幕的鱼和被捕捉的鱼
 	UpdateFishTracksTicker := time.NewTicker(500 * time.Millisecond) //鱼足迹
 	defer buildNormalFishTicker.Stop()
 	defer flushTimeOutFishTicker.Stop()
 	defer UpdateFishTracksTicker.Stop()
-
+	//关闭 > 清理 > 加鱼 > 鱼轨迹   后续可调整
+	go room.handRobotRun()
 	for {
 		select {
 		case <-room.CloseChan:
@@ -175,7 +176,7 @@ func addFish(room *Room, num int) {
 		//		OffsetX:     maxX + OffsetX,
 		//		OffsetY:     OffsetY,
 		//		CurrentX:    maxX + OffsetX,
-		//		CurrentY:    OffsetY,
+		//		CurrentY:    OffsetY,1
 		//		ToBeDeleted: true,
 		//	}
 		//	room.FishGroup = append(room.FishGroup, newFish)
@@ -209,20 +210,16 @@ func (f *Fish) hitFish(bulletId BulletId) bool {
 	f.Mutex.Lock()
 	defer f.Mutex.Unlock()
 	odds := fishKinds[f.FishKind].Odds
-
-	// 生成随机数
+	// 使用随机数范围控制捕获率
 	i := odds / int(bulletId)
-	a := rand.Intn(int(i))
-	b := rand.Intn(int(i))
-
-	// 命中条件的判断
+	a := rand.Intn(int(i) + 1)
+	b := 0
+	// 是否命中
 	hitCondition := a == b && !f.Hit && !f.ToBeDeleted //被别人锁定 以及
-
 	if hitCondition {
 		f.Hit = true
 		f.ToBeDeleted = true
 		return true
 	}
-
 	return false
 }

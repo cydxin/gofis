@@ -30,7 +30,7 @@ var upgrader = websocket.Upgrader{
 // 定义连接的结构体
 type Client struct {
 	conn      *websocket.Conn
-	UserInfo  *UserInfo
+	UserInfo  *UserGameInfo
 	Room      *Room
 	inChan    chan []byte
 	outChan   chan []byte
@@ -42,9 +42,10 @@ type Client struct {
 
 type UserId int64
 
-type UserInfo struct {
+type UserGameInfo struct {
 	UserId   UserId  `json:"userId"`
 	Score    int     `json:"-"`       //对局时的积分
+	GroupId  int     `json:"GroupId"` //机器人标识
 	Balance  float64 `json:"balance"` //余额
 	Name     string  `json:"name"`
 	NickName string  `json:"nick_name"`
@@ -65,7 +66,7 @@ type catchFishReq struct {
 
 func (c *Client) sendMsg(msg []byte) {
 	if c.UserInfo != nil {
-		//logs.Debug("user [%v] send msg %v", c.UserInfo.UserId, string(msg))
+		//logs.Debug("user [%v] send msg %v", c.UserGameInfo.UserId, string(msg))
 	}
 	//fmt.Printf(" send msg %v\n", string(msg))
 	//fmt.Printf(" send msg %v\n", msg)
@@ -140,7 +141,7 @@ func (c *Client) readPump() {
 		if err != nil { //存在错误状态
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) { //意外关闭的状态下
 				if c.UserInfo != nil { //如果用户是有登录，服务器没有异常的情况下就是 用户关闭
-					logs.Error("websocket userId [%v] UserInfo [%d] 意外关闭错误: %v", c.UserInfo.UserId, &c.UserInfo, err)
+					logs.Error("websocket userId [%v] UserGameInfo [%d] 意外关闭错误: %v", c.UserInfo.UserId, &c.UserInfo, err)
 				} else { //如果用户没有登录
 					logs.Error("WebSocket 意外关闭错误: %v", err)
 				}
@@ -171,7 +172,7 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := r.Header.Get("Sec-Websocket-Key")
 
-	client := &Client{conn: conn, msgChan: make(chan []byte, 100), closeChan: make(chan bool, 1), UserInfo: &UserInfo{}} //初始的客户端连接
+	client := &Client{conn: conn, msgChan: make(chan []byte, 100), closeChan: make(chan bool, 1), UserInfo: &UserGameInfo{}} //初始的客户端连接
 	logs.Debug("客户端可以连接")
 
 	//创建读写 协程做之后的操作

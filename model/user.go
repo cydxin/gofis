@@ -52,7 +52,7 @@ type UserInfo struct {
 
 func GetUserByCredentials(username, password string) (*UserInfo, error) {
 	var userInfo UserInfo
-	query := "SELECT * FROM users WHERE phone = ?  LIMIT 1"
+	query := "SELECT * FROM users WHERE phone = ?  and group_id = 1 LIMIT 1 "
 
 	// 使用全局数据库连接 db
 	err := db.Get(&userInfo, query, username)
