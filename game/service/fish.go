@@ -17,11 +17,16 @@ type FishKind struct {
 	Name  string // 鱼的名称
 }
 
+// 先不定义kindID 直接int
 var fishKinds = map[int]FishKind{
 	0: {Speed: 110, Odds: 2, Name: "浪浪鱼"},
 	1: {Speed: 100, Odds: 2, Name: "茂泽鱼"},
 	2: {Speed: 80, Odds: 3, Name: "小兰鱼"},
 	3: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
+	4: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
+	5: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
+	6: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
+	7: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
 }
 
 type FishId int
@@ -32,7 +37,7 @@ type Fish struct {
 	OffsetY     int    `json:"offset_y"`  // 鱼相对于之前Y的位置
 	CurrentX    int    `json:"CurrentX"`  // 鱼当前位置x
 	CurrentY    int    `json:"CurrentY"`  // 鱼当前位置y
-	FishKind    int    `json:"fish_kind"` //育种
+	FishKind    int    `json:"fish_kind"` // 育种
 	Hit         bool   `json:"hit"`
 	ToBeDeleted bool   `json:"to_be_deleted"`
 	Mutex       sync.Mutex
@@ -47,10 +52,11 @@ func handFishInit(room *Room) {
 	room.FishGroup = make(map[FishId]*Fish)
 	// 为每个元素分配一个新的 Fish 对象
 	//todo:多边出鱼 参考addFish
+	var kinds []interface{}
 	for i := 0; i < 20; i++ {
 		randomFishKindKey := rand.Intn(len(fishKinds))
 		currentY := rand.Intn(maxY)
-
+		kinds[randomFishKindKey] = FishId(i + 1)
 		room.FishGroup[FishId(i+1)] = &Fish{
 			FishId:      FishId(i + 1),
 			FishKind:    randomFishKindKey,
@@ -62,7 +68,6 @@ func handFishInit(room *Room) {
 		}
 	}
 	room.fishMutex.Unlock()
-	//printFishGroupJSON(room)
 }
 
 // handFish run 处理鱼的运动 也是主流程
@@ -222,4 +227,19 @@ func (f *Fish) hitFish(bulletId BulletId) bool {
 		return true
 	}
 	return false
+}
+func (c *Client) catchFish(fishId FishId, bulletId BulletId) {
+	//计算概率
+	//已使用毫秒触发尝试，同时发送不会出现都返回true，考虑到实际情况更少，不做锁处理
+	c.UserInfo.Score -= int(bulletId)
+	if c.Room.FishGroup[fishId].hitFish(bulletId) {
+		Score := fishKinds[c.Room.FishGroup[fishId].FishKind].Odds
+		c.UserInfo.Score += Score
+		catchResult := []interface{}{"catch_fish_reply",
+			map[string]interface{}{
+				"userId":   c.UserInfo.UserId,
+				"integral": Score,
+			}}
+		c.Room.broadcast(catchResult)
+	}
 }

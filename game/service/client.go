@@ -27,7 +27,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true }, //不验证origin
 }
 
-// 定义连接的结构体
+// Client 定义连接的结构体
 type Client struct {
 	conn      *websocket.Conn
 	UserInfo  *UserGameInfo
@@ -42,19 +42,28 @@ type Client struct {
 
 type UserId int64
 
+// PlayerConfiguration 玩家配置规范
+type PlayerConfiguration struct {
+	InitScore    int     `json:"-"`        //开局积分
+	Power        float64 `json:"power"`    // 额外概率
+	HitSpeed     float32 `json:"HitSpeed"` // 发送速度
+	Room         *Room   `json:"-"`        // 发送速度
+	LockFishType string  `json:"-"`        // 发送速度
+}
+
+// UserGameInfo 配置类型
 type UserGameInfo struct {
-	UserId   UserId  `json:"userId"`
-	Score    int     `json:"-"`       //对局时的积分
-	GroupId  int     `json:"GroupId"` //机器人标识
-	Balance  float64 `json:"balance"` //余额
-	Name     string  `json:"name"`
-	NickName string  `json:"nick_name"`
-	//Ready       bool    `json:"ready"`      // 游戏是否准备好，即游戏加载ok，所有room内的userinfo的都true后，开始给捕鱼数据  使用client的
-	SeatIndex   int     `json:"seatIndex"`  // 座位，从左到右 从上到下 按进入房间顺序给
-	BulletLevel int     `json:"cannonKind"` // 子弹等级
-	Power       float64 `json:"power"`      // 额外概率
-	Online      bool    `json:"online"`     // 离线
-	//client      *Client `json:"-"`
+	UserId      UserId               `json:"userId"`
+	GroupId     int                  `json:"GroupId"`    //机器人标识
+	SeatIndex   int                  `json:"seatIndex"`  // 座位，从左到右 从上到下 按进入房间的顺序给
+	Score       int                  `json:"-"`          //对局时的积分
+	BulletLevel int                  `json:"cannonKind"` // 子弹等级
+	GameConfig  *PlayerConfiguration `json:"-"`          //对局时的配置 此数据不展示
+	Balance     float64              `json:"balance"`    //余额
+	Name        string               `json:"name"`
+	NickName    string               `json:"nick_name"`
+	Online      bool                 `json:"online"` // 离线
+	Client      *Client              `json:"-"`
 }
 
 type BulletId int
@@ -110,7 +119,10 @@ func (c *Client) writePump() {
 				_ = c.conn.Close()
 			}
 		case <-PingTicker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			err := c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err != nil {
+				return
+			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				logs.Debug("PingTicker write message err : %v", err)
 				return
@@ -128,14 +140,26 @@ func (c *Client) writePump() {
 
 func (c *Client) readPump() {
 	defer func() { // 协程结束后会执行的操作
-		c.conn.Close()
+		err := c.conn.Close()
+		if err != nil {
+			return
+		}
 		if c.UserInfo != nil {
 			logs.Info("用户 %v readPump断开", c.UserInfo.UserId)
 		}
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	err := c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err != nil {
+		return
+	}
+	c.conn.SetPongHandler(func(string) error {
+		err := c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil { //存在错误状态
@@ -191,20 +215,4 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 		client.sendMsg(append([]byte{'0'}, msg...))
 		client.sendMsg(append([]byte{'4', '0'}))
 	}
-}
-func (c *Client) catchFish(fishId FishId, bulletId BulletId) {
-	//计算概率
-	//已使用毫秒触发尝试，同时发送不会出现都返回true，考虑到实际情况更少，不做锁处理
-	c.UserInfo.Score -= int(bulletId)
-	if c.Room.FishGroup[fishId].hitFish(bulletId) {
-		Score := fishKinds[c.Room.FishGroup[fishId].FishKind].Odds
-		c.UserInfo.Score += Score
-		catchResult := []interface{}{"catch_fish_reply",
-			map[string]interface{}{
-				"userId":   c.UserInfo.UserId,
-				"integral": Score,
-			}}
-		c.Room.broadcast(catchResult)
-	}
-
 }

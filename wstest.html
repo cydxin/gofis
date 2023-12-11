@@ -35,7 +35,8 @@
 <button onclick="ready()">准备ok</button><br>
 <input type="text" style="width:100px;height:30px;" id="fishid" placeholder="鱼id" value="2">
 <input type="text" style="width:100px;height:30px;" id="bullid" placeholder="炮等级" value="2">
-<button onclick="shot()">开炮</button><br>
+<button onclick="hit()">开炮</button><br>
+<button onclick="shot()">触碰鱼</button><br>
 
 <button onclick="disconnect()">断开连接</button><br>
 <br>
@@ -142,14 +143,25 @@
             return false
         }
         const dataToSend = {
-            event: 'catch_fish',
+            event: 'touchFish',
             FishId: parseFloat(fishid.value),
             BulletId: parseFloat(bullid.value),
         };
         websocket.send( 42 + JSON.stringify(dataToSend));
     }
-
-
+    function hit() {
+        if ( !bullid.value) {
+            alert("选择炮");
+            return false
+        }
+        const dataToSend = {
+            event: 'fireBullets',
+            bulletStartingPoint: "400,0",
+            bulletEndPoint: "1500,1080",
+            BulletId: parseFloat(bullid.value),
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
     // 断开连接
     function disconnect() {
         if (websocket) {

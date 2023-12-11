@@ -7,6 +7,18 @@ import (
 	"gofish/model"
 )
 
+type eventHandler func(reqMap map[string]interface{}, client *Client)
+
+var eventHandlers = map[string]eventHandler{
+	"pkRecord":    handlePKRecord,
+	"matchRecord": handleMatchRecord,
+	"expRecord":   handleExpRecord,
+	"enterRoom":   handleEnterRoom,
+	"ready":       handleReady,
+	"touchFish":   handleTouchFish,
+	"fireBullets": handleFireBullets,
+}
+
 func wsRequest(req []byte, client *Client) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -65,13 +77,18 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 		logs.Error("Login failed: %v", err)
 		return
 	}
-
+	PlayerConfig := &PlayerConfiguration{
+		InitScore: 0,
+		Power:     0,
+		HitSpeed:  0,
+	}
 	// 设置 client.UserGameInfo 中的字段
 	client.UserInfo = &UserGameInfo{
-		UserId:   UserId(userInfo.ID),
-		Name:     userInfo.Account,
-		NickName: userInfo.Nickname,
-		GroupId:  userInfo.GroupID,
+		UserId:     UserId(userInfo.ID),
+		Name:       userInfo.Account,
+		NickName:   userInfo.Nickname,
+		GroupId:    userInfo.GroupID,
+		GameConfig: PlayerConfig,
 	}
 	client.IsReady = false
 	// TODO: 发送登录成功的消息给客户端
@@ -85,56 +102,23 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 	client.sendMsg(userInfoJSON)
 }
 
-// 其他请求
+// 处理其他请求
 func handleRequest(reqMap map[string]interface{}, client *Client) {
+	fmt.Printf("eventHandlers: %v", eventHandlers)
 	if len(reqMap) > 0 {
-		act := reqMap["event"]
-		switch act {
-		//PK记录
-		case "pkRecord":
-			break
-		//比赛记录
-		case "matchRecord":
-			break
-		//体验记录
-		case "expRecord":
-			break
-		//进入房间
-		case "enterRoom":
-			roomNumFloat, okRoomNum := reqMap["roomNum"].(float64)
-			if !okRoomNum {
-				fmt.Printf("参数错判 %v: %v\n", okRoomNum, reqMap["roomNum"])
-				client.sendMsg([]byte("参数错判"))
-				return
-			}
-			// 将 float64 转换为 int
-			roomNum := int(roomNumFloat)
-			EnterRoom(roomNum, client)
-			break
-		case "ready":
-			client.IsReady = true
-			//fmt.Printf("client准备 %v\n", client)
-
-			client.sendMsg([]byte("收到了你的准备"))
-			break
-		case "catch_fish":
-			if len(reqMap) < 2 {
-				return
-			}
-			fmt.Printf("reqmap格式 %v\n", reqMap)
-			BulletIdFloat64, errBulletId := reqMap["BulletId"].(float64)
-			FishIdFloat64, errFishId := reqMap["FishId"].(float64)
-			if !errBulletId || !errFishId {
-				fmt.Printf("错误参数:\n errBulletId:%v ; errFishId:%v \n", errBulletId, errFishId)
-			}
-			bulletId := BulletId(BulletIdFloat64)
-			fishId := FishId(FishIdFloat64)
-			catchFishReq := catchFishReq{
-				BulletId: bulletId, // 使用类型断言将值转换为 BulletId 类型
-				FishId:   fishId,   // 使用类型断言将值转换为 FishId 类型
-			}
-			client.catchFish(catchFishReq.FishId, catchFishReq.BulletId)
-			break
+		act, ok := reqMap["event"].(string)
+		if !ok {
+			fmt.Printf("无效的事件：%v\n", reqMap["event"])
+			return
 		}
+
+		// 从映射中获取事件处理函数
+		handler, exists := eventHandlers[act]
+		if !exists {
+			fmt.Printf("未知的事件：%v\n", act)
+			return
+		}
+		// 调用事件处理函数
+		handler(reqMap, client)
 	}
 }

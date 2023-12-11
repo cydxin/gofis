@@ -33,7 +33,12 @@ type Room struct {
 	CloseChan       chan bool        // 通道，用于进行信号通知，比如关闭房间
 	Players         map[int]*Client  // 使用map存储玩家信息，以玩家ID作为键
 	FishGroup       map[FishId]*Fish // 使用map存储鱼，以鱼ID作为键  todo:换回切片
+	MaxOdsFishId    FishId
+	NextOdsFishId   FishId
 	robotAddTicker  *time.Ticker
+	maxFishIdOds    FishId //鱼最大赔率 共享给全部机器人
+	nextFishIdOds   FishId //鱼次大赔率 共享给全部机器人
+	randFishIdOds   FishId //鱼随机赔率 共享给全部机器人
 	mutex           sync.Mutex
 	fishMutex       sync.Mutex
 }
@@ -46,6 +51,7 @@ func EnterRoom(roomNum int, client *Client) {
 	defer roomMutex.Unlock()
 	room.Players[int(client.UserInfo.UserId)] = client
 	client.Room = room
+	client.UserInfo.Client = client
 	room.broadcast([]interface{}{"newJoin", map[string]interface{}{"userInfo": client.UserInfo}})
 	//等待handFishInit完成
 	if len(room.Players) == roomNum { // 人满了 开始游戏！！！
@@ -66,7 +72,7 @@ func handRoomRun(room *Room) {
 		for _, client := range room.Players {
 			// 所有玩家进入游戏 加载资源后 再开始发送鱼的数据，
 			//或许我可以先准备资源，而不是等玩家满了再准备
-			if !client.IsReady {
+			if !client.IsReady && client.UserInfo.GroupId != 2 {
 				allReady = false
 				break
 			}
@@ -90,13 +96,14 @@ func getOrCreateRoom(roomNum int) *Room {
 		roomID := nextRoomID
 
 		// 在创建房间时初始化 CloseChan
+		timeTick, _ := randomTicker(30*time.Second, 60*time.Second)
 		room = &Room{
 			ID:             roomID,
 			MaxPlayers:     roomNum,
 			IsClose:        false,
 			CloseChan:      make(chan bool),
 			Players:        make(map[int]*Client),
-			robotAddTicker: randomTicker(30*time.Second, 60*time.Second),
+			robotAddTicker: timeTick,
 		}
 		rooms[roomID] = room
 		roomWait[roomNum] = room
@@ -114,7 +121,7 @@ func getOrCreateRoom(roomNum int) *Room {
 					}
 					addRobotToRoom(room.MaxPlayers)
 					room.robotAddTicker.Stop()
-					room.robotAddTicker = randomTicker(30*time.Second, 60*time.Second)
+					room.robotAddTicker, _ = randomTicker(30*time.Second, 60*time.Second)
 					room.mutex.Unlock()
 				case <-room.CloseChan:
 					return
@@ -156,9 +163,10 @@ func closeRoomTimer(room *Room, min int) {
 
 // 时间范围
 // randomTicker 返回一个随机时间间隔的 Ticker
-func randomTicker(min, max time.Duration) *time.Ticker {
+func randomTicker(min, max time.Duration) (*time.Ticker, time.Duration) {
 	interval := time.Duration(rand.Int63n(int64(max-min)) + int64(min))
-	return time.NewTicker(interval)
+	ticker := time.NewTicker(interval)
+	return ticker, interval
 }
 func closeRoom(room *Room) {
 	room.mutex.Lock()
@@ -177,9 +185,6 @@ func closeRoom(room *Room) {
 	close(room.CloseChan) //防止意外的没有关闭
 }
 
-// func (robotJoinRoom)  {
-//
-// }
 // 使用 interface实现自定义
 func (room *Room) sendMsgAllPlayer(messages ...interface{}) {
 	var byteMessages []byte //定义一个byte
@@ -218,7 +223,7 @@ func (room *Room) broadcast(data []interface{}) {
 	} else {
 		dataByte = append([]byte{'4', '2'}, dataByte...)
 		for _, client := range room.Players {
-			if client.UserInfo.UserId > 0 {
+			if client.UserInfo.UserId > 0 && client.UserInfo.GroupId == 1 {
 				client.sendMsg(dataByte)
 			}
 		}
@@ -236,4 +241,123 @@ func (room *Room) handRobotRun() {
 	if len(robList) == 0 {
 		return
 	}
+	// 启动每个机器人的操作goroutine
+	for _, robot := range robList {
+		go func(robot *UserGameInfo) {
+			//初始化运行
+			switchTurret(robot)
+			switchTurretSpeed(robot)
+			switchLockFish(robot)
+			go performRobotAction(robot)
+			//切换炮台
+			switchTurretTimer, _ := randomTicker(10, 30)
+			//切换炮速
+			gunSpeedTimer, _ := randomTicker(3, 8)
+			//切换瞄准单位  使用射速判定时间 1.0攻速为例子，一秒射一下， 三到十颗子弹就是 3到十秒
+			switchLockFishTimer, _ := randomTicker(time.Duration(3*robot.GameConfig.HitSpeed), time.Duration(8*robot.GameConfig.HitSpeed))
+			// 执行机器人的操作逻辑
+			for {
+				select {
+				case <-room.CloseChan:
+					return
+				case <-switchTurretTimer.C:
+					switchTurret(robot)
+				case <-gunSpeedTimer.C:
+					switchTurretSpeed(robot)
+				case <-switchLockFishTimer.C:
+					switchLockFish(robot)
+				default:
+				}
+			}
+		}(robot)
+	}
+}
+
+func performRobotAction(robot *UserGameInfo) {
+	//robot.GameConfig.Room.FishGroup
+	//射速 * 此次时间 等于需要循环的次数
+	//shot := time.NewTicker(time.Second * )
+	var bulletStartingPoint string
+	var bulletEndPoint string
+	select {
+	case <-robot.GameConfig.Room.CloseChan:
+		return
+	default:
+		for _, fish := range robot.GameConfig.Room.FishGroup {
+			if !fish.ToBeDeleted {
+				bulletStartingPoint = "0,0"
+				bulletEndPoint = fmt.Sprintf("%d,%d", fish.CurrentX, fish.CurrentY)
+			}
+		}
+		FireBulletsResult := []interface{}{"fire_bullets",
+			map[string]interface{}{
+				"userId":              robot.UserId,
+				"bulletId":            robot.BulletLevel,
+				"bulletStartingPoint": bulletStartingPoint,
+				"bulletEndPoint":      bulletEndPoint,
+			},
+		}
+		robot.GameConfig.Room.broadcast(FireBulletsResult)
+		time.Sleep(time.Second * (1 / time.Duration(robot.GameConfig.HitSpeed)))
+	}
+}
+
+func switchLockFish(robot *UserGameInfo) {
+	probability := rand.Intn(100) + 1 // 概率
+	switch {
+	case probability <= 50: //50的概率 赔率最高的鱼
+		robot.GameConfig.LockFishType = "max"
+	case probability <= 80: //51 - 80 30赔率次高的鱼
+		robot.GameConfig.LockFishType = "next"
+	default: //81-10 随机目标
+		robot.GameConfig.LockFishType = "rand"
+	}
+}
+
+func switchTurretSpeed(robot *UserGameInfo) {
+	//上限速度： 2次射击在一秒内
+	probability := rand.Intn(100) + 1 // 概率
+	switch {
+	case probability <= 50: //50的概率 上限速度
+		robot.GameConfig.HitSpeed = 2
+	case probability <= 85: //51 - 85 35的概率随机射速
+		robot.GameConfig.HitSpeed = rand.Float32()*(2.0-0.1) + 0.1
+	default:
+		robot.GameConfig.HitSpeed = 0
+	}
+}
+func switchTurret(robot *UserGameInfo) {
+	probability := rand.Intn(100) + 1 // 概率
+	if robot.Score > robot.GameConfig.InitScore {
+		switch {
+		case probability >= 81: //81 - 100 20的概率2 1 随机一个
+			//10的概率二分炮或一分
+			robot.BulletLevel = rand.Intn(2) + 1
+		case probability >= 51: //51 - 80 30的概率 4 5 随机一个
+			//15的概率四分炮或五分
+			robot.BulletLevel = rand.Intn(2) + 4
+		case probability <= 50: //1 - 50 50的概率 3
+			//50的概率三分炮
+			robot.BulletLevel = 3
+		}
+	} else {
+		switch {
+		case probability <= 50: //1 - 50 50的概率 1
+			//50的概率一分炮
+			robot.BulletLevel = 1
+		case probability <= 90: //51 - 90 40的概率2 3  随机一个
+			//20的概率二或三分炮
+			robot.BulletLevel = rand.Intn(2) + 2
+		case probability >= 91: //91 - 100 10的概率4 5 随机一个
+			//5的概率四分炮或五分
+			robot.BulletLevel = rand.Intn(2) + 4
+		}
+	}
+	switchTurretResult := []interface{}{"switch_turret",
+		map[string]interface{}{
+			"user_id":      robot.UserId,
+			"bullet_level": robot.BulletLevel,
+		},
+	}
+	robot.GameConfig.Room.broadcast(switchTurretResult)
 }
