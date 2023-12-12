@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/astaxie/beego/logs"
+	"gofish/common"
 	"math/rand"
 	"sync"
 	"time"
@@ -145,7 +146,7 @@ func addRobotToRoom(roomNum int) {
 func generateRobotUserInfo() *UserGameInfo {
 	// 实现根据需要生成机器人用户信息的逻辑
 	return &UserGameInfo{
-		UserId: UserId(rand.Intn(500)),
+		UserId: common.UserId(rand.Intn(500)),
 	}
 }
 func closeRoomTimer(room *Room, min int) {
@@ -183,25 +184,6 @@ func closeRoom(room *Room) {
 	// 发送给前端
 	room.broadcast(closeRoom)
 	close(room.CloseChan) //防止意外的没有关闭
-}
-
-// 使用 interface实现自定义
-func (room *Room) sendMsgAllPlayer(messages ...interface{}) {
-	var byteMessages []byte //定义一个byte
-	for _, msg := range messages {
-		switch v := msg.(type) {
-		case string:
-			byteMessages = append(byteMessages, []byte(v)...)
-		case []byte:
-			byteMessages = append(byteMessages, v...)
-		default:
-			byteMessages = append(byteMessages, []byte(fmt.Sprintf("%v", msg))...)
-		}
-	}
-	// 发送消息给房间中的所有玩家
-	for _, client := range room.Players {
-		client.sendMsg(byteMessages)
-	}
 }
 
 func (room *Room) broadcastFishLocation() {

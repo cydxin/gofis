@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/astaxie/beego/logs"
+	"gofish/common"
 	"gofish/model"
 )
 
@@ -43,7 +44,6 @@ func wsRequest(req []byte, client *Client) {
 			return
 		}
 		fmt.Printf("reqMap:%v \n", reqMap)
-		fmt.Printf("UserGameInfo:%v \n", client.UserInfo)
 		if client.UserInfo.UserId == 0 { //ws内无userinfo 说明还是没登录过的,要强制登录
 			if event == "login" {
 				handleLoginRequest(reqMap, client)
@@ -84,7 +84,7 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 	}
 	// 设置 client.UserGameInfo 中的字段
 	client.UserInfo = &UserGameInfo{
-		UserId:     UserId(userInfo.ID),
+		UserId:     common.UserId(userInfo.ID),
 		Name:       userInfo.Account,
 		NickName:   userInfo.Nickname,
 		GroupId:    userInfo.GroupID,
@@ -104,7 +104,6 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 
 // 处理其他请求
 func handleRequest(reqMap map[string]interface{}, client *Client) {
-	fmt.Printf("eventHandlers: %v", eventHandlers)
 	if len(reqMap) > 0 {
 		act, ok := reqMap["event"].(string)
 		if !ok {

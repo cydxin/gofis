@@ -96,8 +96,7 @@
     function pk() {
         const dataToSend = {
             event: 'pkRecord',
-            account: '15707830445',
-            password: '123123123'
+            page: 1,
         };
         websocket.send( 42 + JSON.stringify(dataToSend));
     }

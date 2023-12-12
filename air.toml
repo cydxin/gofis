@@ -1,0 +1,28 @@
+# air.toml
+
+# Build配置
+[build]
+  # Build命令
+  cmd = "go build -o gofish/game/main"
+
+  # 运行命令
+  run = "gofish/game/main"
+
+  # 监听的目录
+  watch = ["./", "./service/", "./model/"]
+
+  # 不检测的目录
+  exclude_dir = ["./static/", "./templates/"]
+
+  # 不检测的后缀
+  exclude_ext = ["doc", "log", "json", "sql"]
+
+# 进程配置
+[task]
+  # 进程数量
+  max = 1
+
+  # 等待时间
+  wait = 10
+
+# Web服务器配置

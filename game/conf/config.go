@@ -1,4 +1,4 @@
-package main
+package conf
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"gofish/game/common"
 )
 
-func initConf() (err error) {
+func InitConf() (err error) {
 	conf, err := config.NewConfig("ini", "./common/conf/conf.conf")
 	if err != nil {
 		fmt.Println("没有配置文件:", err)

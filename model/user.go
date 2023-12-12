@@ -1,21 +1,12 @@
-// model/user.go
 package model
 
 import (
 	"database/sql"
 	"fmt"
-	"github.com/jmoiron/sqlx" // 导入正确的包
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/guregu/null.v4"
 	"time"
 )
-
-var db *sqlx.DB
-
-// InitDB 初始化全局数据库连接
-func InitDB(database *sqlx.DB) {
-	db = database
-}
 
 // UserInfo 表示用户信息
 type UserInfo struct {

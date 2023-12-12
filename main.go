@@ -6,7 +6,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"gofish/game/common"
+	"gofish/game/conf"
 	_ "gofish/game/router" //直接一手触发init
+	"gofish/game/service"
 	"gofish/model"
 	"net/http"
 )
@@ -14,14 +16,14 @@ import (
 func main() {
 	fmt.Println("开始运行")
 	//定义初始化
-	err := initConf()
+	err := conf.InitConf()
 	if err != nil {
 		logs.Error("init conf err: %v", err)
 		return
 	}
 	logs.Debug("读取conf.conf配置完成")
 
-	err = initSec()
+	err = conf.InitConf()
 	if err != nil {
 		logs.Error("初始化initSec错误： %v", err)
 		return
@@ -45,7 +47,8 @@ func main() {
 
 	err = http.ListenAndServe(addr, nil)
 	if err != nil {
-		logs.Error("ListenAndServe err: %v", err)
+		logs.Error("监听错误: %v", err)
 	}
+	service.HandleHallBroadcast()
 	select {}
 }

@@ -3,8 +3,10 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/astaxie/beego/logs"
 	"github.com/gorilla/websocket"
+	"gofish/common"
 	"net/http"
 	"time"
 )
@@ -16,15 +18,19 @@ const (
 	maxMessageSize = 512
 )
 
+// 过滤
 var (
 	newline = []byte{'\n'}
 	space   = []byte{' '}
 )
+var allClient = make(map[*Client]bool)
+
+var hallBroadcast = make(chan []byte)
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true }, //不验证origin
+	CheckOrigin:     func(r *http.Request) bool { return true }, //直接true
 }
 
 // Client 定义连接的结构体
@@ -40,8 +46,6 @@ type Client struct {
 	isClose   bool // 通道 closeChan 是否已经关闭
 }
 
-type UserId int64
-
 // PlayerConfiguration 玩家配置规范
 type PlayerConfiguration struct {
 	InitScore    int     `json:"-"`        //开局积分
@@ -53,7 +57,7 @@ type PlayerConfiguration struct {
 
 // UserGameInfo 配置类型
 type UserGameInfo struct {
-	UserId      UserId               `json:"userId"`
+	UserId      common.UserId        `json:"userId"`
 	GroupId     int                  `json:"GroupId"`    //机器人标识
 	SeatIndex   int                  `json:"seatIndex"`  // 座位，从左到右 从上到下 按进入房间的顺序给
 	Score       int                  `json:"-"`          //对局时的积分
@@ -146,6 +150,7 @@ func (c *Client) readPump() {
 		}
 		if c.UserInfo != nil {
 			logs.Info("用户 %v readPump断开", c.UserInfo.UserId)
+			c.removeFromClients()
 		}
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
@@ -197,6 +202,7 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 	sid := r.Header.Get("Sec-Websocket-Key")
 
 	client := &Client{conn: conn, msgChan: make(chan []byte, 100), closeChan: make(chan bool, 1), UserInfo: &UserGameInfo{}} //初始的客户端连接
+	client.addToClients()
 	logs.Debug("客户端可以连接")
 
 	//创建读写 协程做之后的操作
@@ -215,4 +221,42 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 		client.sendMsg(append([]byte{'0'}, msg...))
 		client.sendMsg(append([]byte{'4', '0'}))
 	}
+}
+
+func (c *Client) addToClients() {
+	allClient[c] = true
+}
+
+func (c *Client) removeFromClients() {
+	if _, ok := allClient[c]; ok {
+		delete(allClient, c)
+	}
+}
+
+func HandleHallBroadcast() {
+	for {
+		select {
+		case msg := <-hallBroadcast:
+			for client := range allClient {
+				client.sendMsg(msg)
+			}
+		}
+	}
+}
+func (c *Client) success(Data interface{}) {
+	// 封装响应数据
+	response := common.Response{
+		Status: "success",
+		Data:   Data,
+	}
+	// 使用encoding/json包进行JSON序列化
+	responseData, err := json.Marshal(response)
+	if err != nil {
+		sprintf := fmt.Sprintf("错误的JSON序列化：%v \n", err)
+		c.sendMsg([]byte(sprintf))
+		return
+	}
+	// 发送JSON数据给前端
+	c.sendMsg(responseData)
+
 }
