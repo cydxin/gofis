@@ -52,11 +52,9 @@ func handFishInit(room *Room) {
 	room.FishGroup = make(map[FishId]*Fish)
 	// 为每个元素分配一个新的 Fish 对象
 	//todo:多边出鱼 参考addFish
-	var kinds []interface{}
 	for i := 0; i < 20; i++ {
 		randomFishKindKey := rand.Intn(len(fishKinds))
 		currentY := rand.Intn(maxY)
-		kinds[randomFishKindKey] = FishId(i + 1)
 		room.FishGroup[FishId(i+1)] = &Fish{
 			FishId:      FishId(i + 1),
 			FishKind:    randomFishKindKey,

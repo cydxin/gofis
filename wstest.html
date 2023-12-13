@@ -101,11 +101,9 @@
         websocket.send( 42 + JSON.stringify(dataToSend));
     }
     function match() {
-        const message = messageInput.value;
         const dataToSend = {
-            event: 'login',
-            account: '15707830445',
-            password: '123123123'
+            event: 'matchRecord',
+            page: 1,
         };
         websocket.send( 42 + JSON.stringify(dataToSend));
     }

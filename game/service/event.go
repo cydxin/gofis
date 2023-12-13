@@ -23,10 +23,22 @@ func handlePKRecord(reqMap map[string]interface{}, client *Client) {
 		// 处理错误
 		return
 	}
-	client.success(pkRecord)
+	client.ModelSuccess(pkRecord)
 }
 func handleMatchRecord(reqMap map[string]interface{}, client *Client) {
-
+	page, okPage := reqMap["page"].(float64)
+	if !okPage {
+		sprintf := fmt.Sprintf("错误的page值: %v,page得到的类型 %t \n", reqMap["page"], reqMap["page"])
+		client.sendMsg([]byte(sprintf))
+		return
+	}
+	matchRecord, err := model.GetMatchRecordsThroughUsers(int(page), client.UserInfo.UserId)
+	if err != nil {
+		sprintf := fmt.Sprintf("数据错误 :%v \n", err)
+		client.sendMsg([]byte(sprintf))
+		return
+	}
+	client.ModelSuccess(matchRecord)
 }
 
 func handleExpRecord(reqMap map[string]interface{}, client *Client) {
@@ -60,9 +72,9 @@ func handleExpRecord(reqMap map[string]interface{}, client *Client) {
 }
 
 func handleEnterRoom(reqMap map[string]interface{}, client *Client) {
-	roomNumFloat, okRoomNum := reqMap["roomNum"].(int)
+	roomNumFloat, okRoomNum := reqMap["roomNum"].(float64)
 	if !okRoomNum {
-		fmt.Printf("参数错判 %v: %v\n", okRoomNum, reqMap["roomNum"])
+		fmt.Printf("参数错判,roomNum的类型 %t： , %v \n", reqMap["roomNum"], reqMap["roomNum"])
 		client.sendMsg([]byte("参数错判"))
 		return
 	}

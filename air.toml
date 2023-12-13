@@ -15,7 +15,7 @@
   exclude_dir = ["./static/", "./templates/"]
 
   # 不检测的后缀
-  exclude_ext = ["doc", "log", "json", "sql"]
+  exclude_ext = ["doc", "log", "json", "sql", "html"]
 
 # 进程配置
 [task]

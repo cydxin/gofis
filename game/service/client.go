@@ -243,7 +243,7 @@ func HandleHallBroadcast() {
 		}
 	}
 }
-func (c *Client) success(Data interface{}) {
+func (c *Client) ModelSuccess(Data interface{}) {
 	// 封装响应数据
 	response := common.Response{
 		Status: "success",
