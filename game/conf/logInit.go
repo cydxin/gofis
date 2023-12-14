@@ -2,8 +2,8 @@ package conf
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/astaxie/beego/logs"
-	_ "github.com/go-sql-driver/mysql"
 	"gofish/game/common"
 )
 
@@ -26,18 +26,29 @@ func initLogger() (err error) {
 	config["filename"] = common.GameConf.LogPath
 	config["level"] = conversionLogLevel(common.GameConf.LogLevel)
 
+	// 设置控制台输出
+	config["console"] = true
+
 	configStr, err := json.Marshal(config)
 	if err != nil {
 		return
 	}
+
 	err = logs.SetLogger(logs.AdapterFile, string(configStr))
 	return
 }
 
-func initSec() (err error) {
+func InitSec() (err error) {
 	err = initLogger()
 	if err != nil {
 		return
 	}
+
+	// 设置日志级别
+	logs.SetLevel(conversionLogLevel(common.GameConf.LogLevel))
+
+	// 输出当前日志级别
+	fmt.Printf("Current log level: %s\n", common.GameConf.LogLevel)
+
 	return
 }

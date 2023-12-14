@@ -1,9 +1,7 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
-	"gofish/common"
 	"gofish/model"
 )
 
@@ -40,35 +38,20 @@ func handleMatchRecord(reqMap map[string]interface{}, client *Client) {
 	}
 	client.ModelSuccess(matchRecord)
 }
-
 func handleExpRecord(reqMap map[string]interface{}, client *Client) {
-	Page := 1
-	if PageFloat, okPage := reqMap["page"].(int); !okPage {
-		fmt.Printf("参数错判 %v: %v\n", okPage, reqMap["page"])
-		client.sendMsg([]byte("参数错判"))
+	page, okPage := reqMap["page"].(float64)
+	if !okPage {
+		sprintf := fmt.Sprintf("错误的page值: %v,page得到的类型 %t \n", reqMap["page"], reqMap["page"])
+		client.sendMsg([]byte(sprintf))
 		return
-	} else {
-		Page = int(PageFloat)
 	}
-	pkRecord, err := model.GetPkRecordsThroughUsers(Page, client.UserInfo.UserId)
+	matchRecord, err := model.GetMatchRecordsThroughUsers(int(page), client.UserInfo.UserId)
 	if err != nil {
-		// 处理错误
+		sprintf := fmt.Sprintf("数据错误 :%v \n", err)
+		client.sendMsg([]byte(sprintf))
 		return
 	}
-
-	// 封装响应数据
-	response := common.Response{
-		Status: "success",
-		Data:   pkRecord,
-	}
-
-	// 使用encoding/json包进行JSON序列化
-	responseData, err := json.Marshal(response)
-	if err != nil {
-		return
-	}
-	// 发送JSON数据给前端
-	client.sendMsg(responseData)
+	client.ModelSuccess(matchRecord)
 }
 
 func handleEnterRoom(reqMap map[string]interface{}, client *Client) {

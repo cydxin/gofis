@@ -13,6 +13,9 @@ type GameServerConf struct {
 	MysqlPassword string
 	MysqlDb       string
 
+	RedisGameCfgAddr string
+	RedisGameCfgPass string
+
 	HallHost   string
 	HallPort   int
 	HallSecret string

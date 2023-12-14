@@ -12,6 +12,8 @@ import (
 
 var nextRoomID int
 
+type roomName string
+
 var rooms = make(map[int]*Room)
 var roomWait = map[int]*Room{
 	1: nil,
@@ -21,11 +23,20 @@ var roomWait = map[int]*Room{
 	5: nil,
 	6: nil,
 }
+var roomNames = map[int]string{
+	1: "体验场",
+	2: "2人PK场",
+	3: "3人PK场",
+	4: "4人PK场",
+	5: "5人PK场",
+	6: "6人PK场",
+}
 var roomMutex sync.Mutex
 
 // Room 结构体定义
 type Room struct {
 	ID              int
+	Name            roomName
 	Status          int //房间的状态
 	MaxPlayers      int
 	AllPlayersReady bool
@@ -95,11 +106,13 @@ func getOrCreateRoom(roomNum int) *Room {
 	if room == nil {
 		nextRoomID++
 		roomID := nextRoomID
-
+		//获取房间的配置
+		initRoomConfig(roomNum, "qwe")
 		// 在创建房间时初始化 CloseChan
 		timeTick, _ := randomTicker(30*time.Second, 60*time.Second)
 		room = &Room{
 			ID:             roomID,
+			Name:           roomName(roomNames[roomNum]),
 			MaxPlayers:     roomNum,
 			IsClose:        false,
 			CloseChan:      make(chan bool),
@@ -131,6 +144,10 @@ func getOrCreateRoom(roomNum int) *Room {
 		}()
 	}
 	return room
+}
+
+func initRoomConfig(num int, name string) {
+	//model.
 }
 
 // 添加机器人到房间
