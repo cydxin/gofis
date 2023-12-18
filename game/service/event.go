@@ -14,7 +14,7 @@ func handlePKRecord(reqMap map[string]interface{}, client *Client) {
 	} else {
 		Page = int(PageFloat)
 	}
-	pkRecord, err := model.GetPkRecordsThroughUsers(Page, client.UserInfo.UserId)
+	pkRecord, err := model.GetPkRecordsThroughUsers(Page, client.UserGameInfo.UserId)
 	if err != nil {
 		sprintf := fmt.Sprintf("err：%v \n", err)
 		client.sendMsg([]byte(sprintf))
@@ -30,7 +30,7 @@ func handleMatchRecord(reqMap map[string]interface{}, client *Client) {
 		client.sendMsg([]byte(sprintf))
 		return
 	}
-	matchRecord, err := model.GetMatchRecordsThroughUsers(int(page), client.UserInfo.UserId)
+	matchRecord, err := model.GetMatchRecordsThroughUsers(int(page), client.UserGameInfo.UserId)
 	if err != nil {
 		sprintf := fmt.Sprintf("数据错误 :%v \n", err)
 		client.sendMsg([]byte(sprintf))
@@ -45,7 +45,7 @@ func handleExpRecord(reqMap map[string]interface{}, client *Client) {
 		client.sendMsg([]byte(sprintf))
 		return
 	}
-	matchRecord, err := model.GetMatchRecordsThroughUsers(int(page), client.UserInfo.UserId)
+	matchRecord, err := model.GetMatchRecordsThroughUsers(int(page), client.UserGameInfo.UserId)
 	if err != nil {
 		sprintf := fmt.Sprintf("数据错误 :%v \n", err)
 		client.sendMsg([]byte(sprintf))
@@ -56,14 +56,20 @@ func handleExpRecord(reqMap map[string]interface{}, client *Client) {
 
 func handleEnterRoom(reqMap map[string]interface{}, client *Client) {
 	roomNumFloat, okRoomNum := reqMap["roomNum"].(float64)
+	roomLevel, okRoomLevel := reqMap["roomLevel"].(string)
 	if !okRoomNum {
 		fmt.Printf("参数错判,roomNum的类型 %t： , %v \n", reqMap["roomNum"], reqMap["roomNum"])
 		client.sendMsg([]byte("参数错判"))
 		return
 	}
+	if !okRoomLevel {
+		fmt.Printf("参数错判,okroomLevel的类型 %t： , %v \n", reqMap["okRoomLevel"], reqMap["okRoomLevel"])
+		client.sendMsg([]byte("参数错判"))
+		return
+	}
 	// 将 float64 转换为 int
 	roomNum := int(roomNumFloat)
-	EnterRoom(roomNum, client)
+	EnterRoom(roomNum, roomLevel, client)
 }
 
 func handleReady(reqMap map[string]interface{}, client *Client) {
@@ -96,7 +102,7 @@ func handleFireBullets(reqMap map[string]interface{}, client *Client) {
 	bulletId := BulletId(bulletIdFloat64)
 	FireBulletsResult := []interface{}{"fire_bullets",
 		map[string]interface{}{
-			"userId":              client.UserInfo.UserId,
+			"userId":              client.UserGameInfo.UserId,
 			"bulletId":            bulletId,
 			"bulletStartingPoint": bulletStartingPoint,
 			"bulletEndPoint":      bulletEndPoint,

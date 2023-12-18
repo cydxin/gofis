@@ -1,4 +1,4 @@
-package common
+package gcommon
 
 var (
 	GameConf = &GameServerConf{}

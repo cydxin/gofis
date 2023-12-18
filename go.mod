@@ -4,7 +4,6 @@ go 1.21.4
 
 require (
 	github.com/astaxie/beego v1.12.3
-	github.com/garyburd/redigo v1.6.4
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/gorilla/websocket v1.5.1

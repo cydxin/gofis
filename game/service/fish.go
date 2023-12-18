@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"github.com/astaxie/beego/logs"
 	"math/rand"
 	"sync"
 	"time"
@@ -72,7 +73,7 @@ func handFishInit(room *Room) {
 func handFishRun(room *Room) {
 	fmt.Print("鱼群开始 \n")
 
-	buildNormalFishTicker := time.NewTicker(time.Second * 20)        //加普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
+	buildNormalFishTicker := time.NewTicker(time.Second * 10)        //加普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
 	flushTimeOutFishTicker := time.NewTicker(time.Second * 5)        //清理走出屏幕的鱼和被捕捉的鱼
 	UpdateFishTracksTicker := time.NewTicker(500 * time.Millisecond) //鱼足迹
 	defer buildNormalFishTicker.Stop()
@@ -83,8 +84,8 @@ func handFishRun(room *Room) {
 	for {
 		select {
 		case <-room.CloseChan:
+			logs.Debug("房间结束")
 			closeRoom(room)
-			fmt.Printf("房间结束\n")
 			return
 		case <-buildNormalFishTicker.C:
 			//fmt.Printf("驾驭\n")
@@ -110,6 +111,7 @@ func handFishRun(room *Room) {
 				}
 			}
 			// 发送给房间内的玩家们
+			logs.Debug("发送鱼迹")
 			room.broadcastFishLocation()
 			room.mutex.Unlock()
 		default:
@@ -127,7 +129,6 @@ func removeFish(room *Room) {
 		}
 	}
 }
-
 func addFish(room *Room, num int) {
 	//fmt.Print("添加鱼的数据 \n")
 	room.fishMutex.Lock()
@@ -229,13 +230,13 @@ func (f *Fish) hitFish(bulletId BulletId) bool {
 func (c *Client) catchFish(fishId FishId, bulletId BulletId) {
 	//计算概率
 	//已使用毫秒触发尝试，同时发送不会出现都返回true，考虑到实际情况更少，不做锁处理
-	c.UserInfo.Score -= int(bulletId)
+	c.UserGameInfo.Score -= int(bulletId)
 	if c.Room.FishGroup[fishId].hitFish(bulletId) {
 		Score := fishKinds[c.Room.FishGroup[fishId].FishKind].Odds
-		c.UserInfo.Score += Score
+		c.UserGameInfo.Score += Score
 		catchResult := []interface{}{"catch_fish_reply",
 			map[string]interface{}{
-				"userId":   c.UserInfo.UserId,
+				"userId":   c.UserGameInfo.UserId,
 				"integral": Score,
 			}}
 		c.Room.broadcast(catchResult)

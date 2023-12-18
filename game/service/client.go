@@ -35,24 +35,24 @@ var upgrader = websocket.Upgrader{
 
 // Client 定义连接的结构体
 type Client struct {
-	conn      *websocket.Conn
-	UserInfo  *UserGameInfo
-	Room      *Room
-	inChan    chan []byte
-	outChan   chan []byte
-	IsReady   bool
-	msgChan   chan []byte
-	closeChan chan bool
-	isClose   bool // 通道 closeChan 是否已经关闭
+	conn         *websocket.Conn
+	UserGameInfo *UserGameInfo
+	Room         *Room
+	inChan       chan []byte
+	outChan      chan []byte
+	IsReady      bool
+	msgChan      chan []byte
+	closeChan    chan bool
+	isClose      bool // 通道 closeChan 是否已经关闭
 }
 
 // PlayerConfiguration 玩家配置规范
 type PlayerConfiguration struct {
 	InitScore    int     `json:"-"`        //开局积分
 	Power        float64 `json:"power"`    // 额外概率
-	HitSpeed     float32 `json:"HitSpeed"` // 发送速度
-	Room         *Room   `json:"-"`        // 发送速度
-	LockFishType string  `json:"-"`        // 发送速度
+	HitSpeed     float32 `json:"HitSpeed"` // 发射速度
+	Room         *Room   `json:"-"`        // 房间
+	LockFishType string  `json:"-"`        // 锁定的鱼
 }
 
 // UserGameInfo 配置类型
@@ -60,7 +60,7 @@ type UserGameInfo struct {
 	UserId      common.UserId        `json:"userId"`
 	GroupId     int                  `json:"GroupId"`    //机器人标识
 	SeatIndex   int                  `json:"seatIndex"`  // 座位，从左到右 从上到下 按进入房间的顺序给
-	Score       int                  `json:"-"`          //对局时的积分
+	Score       int                  `json:"score"`      //对局时的积分
 	BulletLevel int                  `json:"cannonKind"` // 子弹等级
 	GameConfig  *PlayerConfiguration `json:"-"`          //对局时的配置 此数据不展示
 	Balance     float64              `json:"balance"`    //余额
@@ -78,7 +78,7 @@ type catchFishReq struct {
 }
 
 func (c *Client) sendMsg(msg []byte) {
-	if c.UserInfo != nil {
+	if c.UserGameInfo != nil {
 		//logs.Debug("user [%v] send msg %v", c.UserGameInfo.UserId, string(msg))
 	}
 	//fmt.Printf(" send msg %v\n", string(msg))
@@ -100,8 +100,8 @@ func (c *Client) writePump() {
 		//	}
 		//}
 
-		if c.UserInfo != nil {
-			logs.Info("用户 %v writePump断开", c.UserInfo.UserId)
+		if c.UserGameInfo != nil {
+			logs.Info("用户 %v writePump断开", c.UserGameInfo.UserId)
 		}
 	}()
 	for {
@@ -133,7 +133,7 @@ func (c *Client) writePump() {
 			}
 		case <-c.closeChan:
 			if err := c.conn.Close(); err != nil {
-				if c.UserInfo != nil {
+				if c.UserGameInfo != nil {
 					logs.Info("user %v client conn close err : %v", err)
 				}
 			}
@@ -148,8 +148,8 @@ func (c *Client) readPump() {
 		if err != nil {
 			return
 		}
-		if c.UserInfo != nil {
-			logs.Info("用户 %v readPump断开", c.UserInfo.UserId)
+		if c.UserGameInfo != nil {
+			logs.Info("用户 %v readPump断开", c.UserGameInfo.UserId)
 			c.removeFromClients()
 		}
 	}()
@@ -169,8 +169,8 @@ func (c *Client) readPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil { //存在错误状态
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) { //意外关闭的状态下
-				if c.UserInfo != nil { //如果用户是有登录，服务器没有异常的情况下就是 用户关闭
-					logs.Error("websocket userId [%v] UserGameInfo [%d] 意外关闭错误: %v", c.UserInfo.UserId, &c.UserInfo, err)
+				if c.UserGameInfo != nil { //如果用户是有登录，服务器没有异常的情况下就是 用户关闭
+					logs.Error("websocket userId [%v] UserGameInfo [%d] 意外关闭错误: %v", c.UserGameInfo.UserId, &c.UserGameInfo, err)
 				} else { //如果用户没有登录
 					logs.Error("WebSocket 意外关闭错误: %v", err)
 				}
@@ -182,8 +182,8 @@ func (c *Client) readPump() {
 			logs.Debug("读取conf.conf配置完成", string(message))
 		}
 		if err != nil {
-			if c.UserInfo != nil {
-				logs.Error("消息 unMarsha1 错误， user_id[%d] 错误:%v", c.UserInfo.UserId, err)
+			if c.UserGameInfo != nil {
+				logs.Error("消息 unMarsha1 错误， user_id[%d] 错误:%v", c.UserGameInfo.UserId, err)
 			} else {
 				logs.Error("消息 unMarsha1 错误:%v", err)
 			}
@@ -201,7 +201,7 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := r.Header.Get("Sec-Websocket-Key")
 
-	client := &Client{conn: conn, msgChan: make(chan []byte, 100), closeChan: make(chan bool, 1), UserInfo: &UserGameInfo{}} //初始的客户端连接
+	client := &Client{conn: conn, msgChan: make(chan []byte, 100), closeChan: make(chan bool, 1), UserGameInfo: &UserGameInfo{}} //初始的客户端连接
 	client.addToClients()
 	logs.Debug("客户端可以连接")
 

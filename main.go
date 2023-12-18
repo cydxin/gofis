@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/astaxie/beego/logs"
 	_ "github.com/go-sql-driver/mysql"
-	"gofish/game/common"
 	"gofish/game/conf"
+	"gofish/game/gcommon"
 	_ "gofish/game/router" //直接一手触发init
 	"gofish/game/service"
 	"gofish/model"
@@ -13,7 +13,6 @@ import (
 )
 
 func main() {
-
 	logs.Debug("开始运行 \n")
 	//定义初始化
 	err := conf.InitConf()
@@ -31,7 +30,7 @@ func main() {
 	model.InitDb()
 	logs.Debug("InitDb 完成 \n")
 
-	addr := fmt.Sprintf("%s:%d", common.GameConf.Host, common.GameConf.Port)
+	addr := fmt.Sprintf("%s:%d", gcommon.GameConf.Host, gcommon.GameConf.Port)
 	fmt.Println("地址", addr)
 	err = http.ListenAndServe(addr, nil)
 	if err != nil {

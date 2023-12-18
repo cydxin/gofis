@@ -3,7 +3,7 @@ package model
 import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
-	"gofish/game/common"
+	"gofish/game/gcommon"
 	"log"
 	"os"
 	"os/signal"
@@ -15,7 +15,7 @@ var db *sqlx.DB
 // init 函数会在包初始化时调用
 func InitDb() {
 	// 初始化数据库连接
-	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True", common.GameConf.MysqlUser, common.GameConf.MysqlPassword, common.GameConf.MysqlAddr, common.GameConf.MysqlDb)
+	dataSourceName := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True", gcommon.GameConf.MysqlUser, gcommon.GameConf.MysqlPassword, gcommon.GameConf.MysqlAddr, gcommon.GameConf.MysqlDb)
 	database, err := sqlx.Open("mysql", dataSourceName)
 	if err != nil {
 		fmt.Printf("Failed to connect to the database: %v\n", err)

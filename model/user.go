@@ -36,6 +36,7 @@ type UserInfo struct {
 	ParticipationDay       int       `json:"participation_day" db:"participation_day"`
 	MaxParticipationDay    int       `json:"max_participation_day" db:"max_participation_day"`
 	Status                 int       `json:"status" db:"status"`
+	IsOnline               int       `json:"is_online" db:"is_online"`
 	DeletedAt              null.Time `json:"deleted_at" db:"deleted_at"`
 	CreatedAt              time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at" db:"updated_at"`
@@ -62,5 +63,21 @@ func GetUserByCredentials(username, password string) (*UserInfo, error) {
 		return nil, fmt.Errorf("密码错误")
 	}
 
+	return &userInfo, nil
+}
+func GetUserByRobot() (*UserInfo, error) {
+	var userInfo UserInfo
+	query := "SELECT * FROM users WHERE group_id = 2 AND is_online < 2 LIMIT 1 "
+
+	// 使用全局数据库连接 db
+	err := db.Get(&userInfo, query)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// 用户不存在
+			return nil, fmt.Errorf("用户没有")
+		}
+		// 其他数据库错误
+		return nil, err
+	}
 	return &userInfo, nil
 }

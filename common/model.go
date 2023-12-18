@@ -53,15 +53,15 @@ type ExpRecord struct {
 
 // PkRoomInfo pkRoom PK房间配置
 type PkRoomInfo struct {
-	PkNumOfPeople int     `db:"pk_num_of_peo"`
-	RoomName      string  `db:"room_name"`
-	DurationMin   int     `db:"duration_min"`
-	Ticket        float64 `db:"ticket"`
-	HandlingFee   float64 `db:"handling_fee"`
-	Money         float64 `db:"money"`
-	Turret        string  `db:"turret"`
-	ExtWinRate    float64 `db:"ext_win_rate"`
-	InitScore     int     `db:"init_score"`
+	PkNumOfPeople int     `db:"pk_num_of_peo" json:"pk_num_of_peo"`
+	RoomName      string  `db:"room_name" json:"room_name"`
+	DurationMin   int     `db:"duration_min" json:"duration_min"`
+	Ticket        float64 `db:"ticket" json:"ticket"`
+	HandlingFee   float64 `db:"handling_fee" json:"handling_fee"`
+	Money         float64 `db:"money" json:"money"`
+	Turret        string  `db:"turret" json:"turret"`
+	ExtWinRate    float64 `db:"ext_win_rate" json:"ext_win_rate"`
+	InitScore     int     `db:"init_score" json:"init_score"`
 }
 
 // Response 通用响应结构体

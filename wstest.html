@@ -31,6 +31,7 @@
 <button onclick="match()">比赛记录</button>
 <button onclick="exp()">体验场记录</button>
 <input type="number" style="width:100px;height:30px;" id="numinput" placeholder="输入场次" value="2">
+<input type="text" style="width:100px;height:30px;" id="levelinput" placeholder="输入等级 白银场" value="白银场">
 <button onclick="enter()">进入场次</button>
 <button onclick="ready()">准备ok</button><br>
 <input type="text" style="width:100px;height:30px;" id="fishid" placeholder="鱼id" value="2">
@@ -45,6 +46,7 @@
 <script>
     const phoneInput = document.getElementById('phoneInput');
     const numinput = document.getElementById('numinput');
+    const levelinput = document.getElementById('levelinput');
     const messageid = document.getElementById('messageid');
     const reid = document.getElementById('reid');
     const messageDisplay = document.getElementById('messageDisplay');
@@ -56,7 +58,7 @@
     function connect() {
         const id = messageid.value;
         if (!id) {
-           alert("选择用户");
+           // alert("选择用户");
         }
         messageid.disabled = true;
         // const serverUrl = 'ws://192.168.1.228:1215?id=' + id; // 替换成您的 WebSocket 服务器 URL
@@ -118,12 +120,17 @@
     }
     function enter() {
         let num = numinput.value;
+        let roomLevel = levelinput.value;
         if(!num){
             num = 1
+        }
+        if(!roomLevel){
+            roomLevel = "青铜场"
         }
         const dataToSend = {
             event: 'enterRoom',
             roomNum: parseFloat(num),
+            roomLevel: roomLevel,
         };
         websocket.send( 42 + JSON.stringify(dataToSend));
     }    // 发送消息

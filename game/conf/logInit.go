@@ -2,9 +2,8 @@ package conf
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/astaxie/beego/logs"
-	"gofish/game/common"
+	"gofish/game/gcommon"
 )
 
 func conversionLogLevel(logLevel string) int {
@@ -23,8 +22,8 @@ func conversionLogLevel(logLevel string) int {
 
 func initLogger() (err error) {
 	config := make(map[string]interface{})
-	config["filename"] = common.GameConf.LogPath
-	config["level"] = conversionLogLevel(common.GameConf.LogLevel)
+	config["filename"] = gcommon.GameConf.LogPath
+	config["level"] = conversionLogLevel(gcommon.GameConf.LogLevel)
 
 	// 设置控制台输出
 	config["console"] = true
@@ -34,21 +33,20 @@ func initLogger() (err error) {
 		return
 	}
 
-	err = logs.SetLogger(logs.AdapterFile, string(configStr))
+	if config["level"] != "7" {
+		err = logs.SetLogger(logs.AdapterFile, string(configStr))
+	}
 	return
 }
 
 func InitSec() (err error) {
+	if gcommon.GameConf.LogLevel == "debug" {
+		return
+	}
 	err = initLogger()
 	if err != nil {
 		return
 	}
-
 	// 设置日志级别
-	logs.SetLevel(conversionLogLevel(common.GameConf.LogLevel))
-
-	// 输出当前日志级别
-	fmt.Printf("Current log level: %s\n", common.GameConf.LogLevel)
-
 	return
 }
