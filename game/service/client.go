@@ -66,7 +66,7 @@ type UserGameInfo struct {
 	Balance     float64              `json:"balance"`    //余额
 	Name        string               `json:"name"`
 	NickName    string               `json:"nick_name"`
-	Online      bool                 `json:"online"` // 离线
+	Online      int                  `json:"online_status"` // 离线
 	Client      *Client              `json:"-"`
 }
 
@@ -77,16 +77,15 @@ type catchFishReq struct {
 	FishId   FishId   `json:"fishId"`
 }
 
+// 发送消息
 func (c *Client) sendMsg(msg []byte) {
 	if c.UserGameInfo != nil {
-		//logs.Debug("user [%v] send msg %v", c.UserGameInfo.UserId, string(msg))
 	}
-	//fmt.Printf(" send msg %v\n", string(msg))
-	//fmt.Printf(" send msg %v\n", msg)
 	//TODO:加密消息
 	c.msgChan <- msg
 }
 
+// WS服务的写
 func (c *Client) writePump() {
 	PingTicker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -142,6 +141,7 @@ func (c *Client) writePump() {
 	}
 }
 
+// WS服务的读
 func (c *Client) readPump() {
 	defer func() { // 协程结束后会执行的操作
 		err := c.conn.Close()
@@ -193,6 +193,7 @@ func (c *Client) readPump() {
 	}
 }
 
+// ServeWs WS服务
 func ServeWs(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil) //将其升级为WS请求
 	if err != nil {
@@ -223,6 +224,7 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// 添加client
 func (c *Client) addToClients() {
 	allClient[c] = true
 }
@@ -233,17 +235,20 @@ func (c *Client) removeFromClients() {
 	}
 }
 
+// HandleHallBroadcast 大厅的广播
 func HandleHallBroadcast() {
 	for {
 		select {
 		case msg := <-hallBroadcast:
+			dataByte := append([]byte{'4', '2'}, msg...)
 			for client := range allClient {
-				client.sendMsg(msg)
+				client.sendMsg(dataByte)
 			}
 		}
 	}
 }
 
+// ModelSuccess 数据库查询的返回格式
 func (c *Client) ModelSuccess(Data interface{}) {
 	// 封装响应数据
 	response := common.Response{
