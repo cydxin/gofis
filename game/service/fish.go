@@ -71,52 +71,57 @@ func handFishInit(room *Room) {
 
 // handFish run 处理鱼的运动 也是主流程
 func handFishRun(room *Room) {
-	fmt.Print("鱼群开始 \n")
-
-	buildNormalFishTicker := time.NewTicker(time.Second * 10)        //加普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
-	flushTimeOutFishTicker := time.NewTicker(time.Second * 5)        //清理走出屏幕的鱼和被捕捉的鱼
-	UpdateFishTracksTicker := time.NewTicker(500 * time.Millisecond) //鱼足迹
+	logs.Debug("鱼群开始")
+	buildNormalFishTicker := time.NewTicker(time.Second * 10)         //加普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
+	flushTimeOutFishTicker := time.NewTicker(time.Second * 5)         //清理走出屏幕的鱼和被捕捉的鱼
+	UpdateFishTracksTicker := time.NewTicker(5000 * time.Millisecond) //鱼足迹
 	defer buildNormalFishTicker.Stop()
 	defer flushTimeOutFishTicker.Stop()
 	defer UpdateFishTracksTicker.Stop()
-	//关闭 > 清理 > 加鱼 > 鱼轨迹   后续可调整
 	go room.handRobotRun()
+	logs.Debug("开始for select")
 	for {
 		select {
-		case <-room.CloseChan:
-			logs.Debug("房间结束")
+		case msg := <-room.RoomChan:
+			logs.Debug("handFishRun,msg:%v", msg)
+			logs.Debug("handFishRun,<-room.RoomChan")
 			closeRoom(room)
 			return
 		case <-buildNormalFishTicker.C:
-			//fmt.Printf("驾驭\n")
+			logs.Debug("handFishRun,buildNormalFishTicker")
 			addFish(room, 2)
 		case <-flushTimeOutFishTicker.C:
-			//fmt.Printf("删除鱼\n")
+			logs.Debug("handFishRun,flushTimeOutFishTicker")
 			removeFish(room)
 		case <-UpdateFishTracksTicker.C:
-			// 循环处理所有鱼的位置更新
-			//fmt.Print("循环处理所有鱼的位置更新 \n")
-			room.mutex.Lock()
-			//printFishGroupJSON(room)
-			for _, fish := range room.FishGroup {
-				// 随机生成偏移量
-				if fish.CurrentX > maxX || fish.CurrentY > maxY { //走出去的鱼不管了,同时标记
-					fish.ToBeDeleted = true
-				} else {
-					speed := fishKinds[fish.FishKind].Speed
-					fish.OffsetX = rand.Intn(speed + 1)
-					fish.OffsetY = speed - fish.OffsetX
-					fish.CurrentX += fish.OffsetX
-					fish.CurrentY += fish.OffsetY
-				}
-			}
-			// 发送给房间内的玩家们
-			logs.Debug("发送鱼迹")
-			room.broadcastFishLocation()
-			room.mutex.Unlock()
+			logs.Debug("handFishRun,UpdateFishTracksTicker")
+			updateFishTracks(room)
 		default:
+			//logs.Debug(room.RoomChan)
 		}
 	}
+}
+
+func updateFishTracks(room *Room) {
+	room.mutex.Lock()
+	//printFishGroupJSON(room)
+	for _, fish := range room.FishGroup {
+		// 随机生成偏移量
+		if fish.CurrentX > maxX || fish.CurrentY > maxY { //走出去的鱼不管了,同时标记
+			fish.ToBeDeleted = true
+		} else {
+			speed := fishKinds[fish.FishKind].Speed
+			fish.OffsetX = rand.Intn(speed + 1)
+			fish.OffsetY = speed - fish.OffsetX
+			fish.CurrentX += fish.OffsetX
+			fish.CurrentY += fish.OffsetY
+		}
+	}
+	// 发送给房间内的玩家们
+	logs.Debug("发送鱼迹")
+	room.mutex.Unlock()
+	room.broadcastFishLocation()
+	return
 }
 
 func removeFish(room *Room) {

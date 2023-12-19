@@ -14,6 +14,7 @@ func robotRun(room *Room) {
 	for {
 		select {
 		case <-room.robotAddTicker.C:
+			logs.Debug("进入机器人添加")
 			room.mutex.Lock()
 			//先判断人满了没 人满了就结束
 			if room.MaxPlayers == len(room.Players) {
@@ -23,16 +24,17 @@ func robotRun(room *Room) {
 				return
 			}
 			logs.Debug("机器人添加")
-			addRobotToRoom(room)
 			room.robotAddTicker.Stop()
 			room.robotAddTicker, _ = randomTicker(30, 60)
 			room.mutex.Unlock()
+			addRobotToRoom(room)
 			if room.MaxPlayers == len(room.Players) {
 				logs.Debug("结束机器人添加")
 				room.robotAddTicker.Stop()
 				return
 			}
-		case <-room.CloseChan:
+		case <-room.RoomChan:
+			logs.Debug("房间结束 机器人停止")
 			return
 		}
 	}
@@ -42,6 +44,7 @@ func robotRun(room *Room) {
 func addRobotToRoom(room *Room) {
 	robotClient := &Client{
 		UserGameInfo: generateRobotUserInfo(),
+		Room:         room,
 	}
 	// 调用 EnterRoom 函数将机器人加入房间
 	EnterRoom(room.MaxPlayers, room.PkRoomConfig.RoomName, robotClient)
@@ -65,7 +68,7 @@ func generateRobotUserInfo() *UserGameInfo {
 		Balance:     userInfo.Balance,
 		Name:        userInfo.Account,
 		NickName:    userInfo.Nickname,
-		Online:      true,
+		Online:      1,
 		Client:      nil,
 	}
 }
@@ -103,7 +106,8 @@ func (room *Room) handRobotRun() {
 			// 执行机器人的操作逻辑
 			for {
 				select {
-				case <-room.CloseChan:
+				case <-room.RoomChan:
+					logs.Debug("机器人接收到房间关闭信号，结束运行")
 					return
 				case <-switchTurretTimer.C:
 					switchTurret(robot, switchTurretTimer)
@@ -127,7 +131,7 @@ func performRobotAction(robot *UserGameInfo) {
 	ranDomTimes := rand.Intn(5) + 3
 	hitNum := 0
 	select {
-	case <-robot.GameConfig.Room.CloseChan:
+	case <-robot.GameConfig.Room.RoomChan:
 		return
 	default:
 		hitSpeed := robot.GameConfig.HitSpeed

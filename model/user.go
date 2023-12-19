@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/guregu/null.v4"
+	"log"
 	"time"
 )
 
@@ -36,7 +37,7 @@ type UserInfo struct {
 	ParticipationDay       int       `json:"participation_day" db:"participation_day"`
 	MaxParticipationDay    int       `json:"max_participation_day" db:"max_participation_day"`
 	Status                 int       `json:"status" db:"status"`
-	IsOnline               int       `json:"is_online" db:"is_online"`
+	IsOnline               int       `json:"online_status" db:"online_status"`
 	DeletedAt              null.Time `json:"deleted_at" db:"deleted_at"`
 	CreatedAt              time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at" db:"updated_at"`
@@ -67,7 +68,7 @@ func GetUserByCredentials(username, password string) (*UserInfo, error) {
 }
 func GetUserByRobot() (*UserInfo, error) {
 	var userInfo UserInfo
-	query := "SELECT * FROM users WHERE group_id = 2 AND is_online < 2 LIMIT 1 "
+	query := "SELECT * FROM users WHERE group_id = 2 AND online_status < 2 LIMIT 1 "
 
 	// 使用全局数据库连接 db
 	err := db.Get(&userInfo, query)
@@ -80,4 +81,15 @@ func GetUserByRobot() (*UserInfo, error) {
 		return nil, err
 	}
 	return &userInfo, nil
+}
+func SetUserOnline(u interface{}) {
+	// 要更新的用户信息
+	// 执行UPDATE语句
+
+	query := "UPDATE users SET online_status = :online_status  WHERE id = :userId"
+	_, err := db.NamedExec(query, u)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Update successful")
 }

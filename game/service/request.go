@@ -47,7 +47,8 @@ func wsRequest(req []byte, client *Client) {
 		if client.UserGameInfo.UserId == 0 { //ws内无userinfo 说明还是没登录过的,要强制登录
 			if event == "login" {
 				handleLoginRequest(reqMap, client)
-				fmt.Printf("UserGameInfo:%v \n", client.UserGameInfo)
+				jsonData, _ := json.Marshal(client.UserGameInfo)
+				logs.Debug("UserGameInfo:%v", string(jsonData))
 			} else {
 				client.sendMsg([]byte("尚未登录，请登录"))
 				logs.Error("未定义的event %v", reqMap["event"])
@@ -90,6 +91,7 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 		GroupId:    userInfo.GroupID,
 		GameConfig: PlayerConfig,
 	}
+	client.UserGameInfo.setOnline(1)
 	client.IsReady = false
 	// TODO: 发送登录成功的消息给客户端
 	userInfoJSON, err := json.Marshal(userInfo)

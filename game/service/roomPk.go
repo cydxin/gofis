@@ -36,7 +36,7 @@ type Room struct {
 	AllPlayersReady bool
 	IsReady         bool
 	IsClose         bool             // 布尔类型的变量，用于表示房间是否关闭
-	CloseChan       chan bool        // 通道，用于进行信号通知，比如关闭房间
+	RoomChan        chan bool        // 通道，用于进行信号通知，比如关闭房间
 	Players         map[int]*Client  // 使用map存储玩家信息，以玩家ID作为键
 	FishGroup       map[FishId]*Fish // 使用map存储鱼，以鱼ID作为键  todo:换回切片
 	MaxOdsFishId    FishId
@@ -52,39 +52,64 @@ type Room struct {
 
 // EnterRoom 进入房间逻辑
 func EnterRoom(roomNum int, roomLevel string, client *Client) {
-	logs.Debug("进入房间")
 	//使用roomMutex 确保getOrCreateRoom的唯一性即 获取房间时的并发是安全的
 	roomMutex.Lock()
-	//获取等待中的房间
-	room, err := getOrCreateRoom(roomNum, roomLevel)
-	if err != nil {
-		errorMsg := err.Error()
-		marshal, _ := json.Marshal([]interface{}{"err", map[string]interface{}{"message": errorMsg}})
-		client.sendMsg(marshal)
-		return
+	var room *Room // 声明一个 Room 指针
+	if client.Room != nil {
+		logs.Debug("机器人进入房间")
+		room = client.Room
+	} else {
+		//获取等待中的房间
+		r, err := getOrCreateRoom(roomNum, roomLevel)
+		if err != nil {
+			roomMutex.Unlock()
+			errorMsg := err.Error()
+			marshal, _ := json.Marshal([]interface{}{"err", map[string]interface{}{"message": errorMsg}})
+			client.sendMsg(marshal)
+			return
+		}
+		room = r
 	}
-	defer roomMutex.Unlock()
+
+	logs.Debug("roomMutex.Unlock()")
+	roomMutex.Unlock()
+	logs.Debug("room.mutex.Lock()")
+	room.mutex.Lock()
+	defer func() {
+		room.mutex.Unlock()
+		logs.Debug("room.mutex.Unlock()")
+
+	}()
 	//数据操作
+	logs.Debug("数据操作")
 	room.Players[int(client.UserGameInfo.UserId)] = client
 	client.Room = room
 	client.UserGameInfo.Client = client
 	client.UserGameInfo.SeatIndex = len(room.Players)
 	client.UserGameInfo.Score = room.PkRoomConfig.InitScore
+	logs.Debug("初始配置数据 优先机器人使用")
+
+	//初始配置数据 优先机器人使用
 	client.UserGameInfo.GameConfig = &PlayerConfiguration{
-		InitScore:    room.PkRoomConfig.InitScore,
-		Power:        1,
-		HitSpeed:     1,
-		Room:         room,
-		LockFishType: "",
+		InitScore: room.PkRoomConfig.InitScore,
+		Power:     1,
+		Room:      room,
 	}
+
+	logs.Debug("标记用户状态为房间中")
+	//标记用户状态为房间中
+	client.UserGameInfo.setOnline(2) // 标记用户状态为游戏中
 	//广播给房间内的人 谁谁谁加入了
 	room.broadcast([]interface{}{"newJoin", map[string]interface{}{"userInfo": client.UserGameInfo}})
 	//等待handFishInit完成
 	if len(room.Players) == roomNum { // 人满了 开始游戏！！！
+		logs.Debug("人满了")
 		room.robotAddTicker.Stop()
-		roomWait[roomNum][roomLevel] = nil //弹出此等待的房间
+		roomWait[roomNum][roomLevel] = nil // 弹出此等待的房间
 		room.Status = 1                    // 标记为游戏中状态
-		go handFishInit(room)              //todo: 已经把锁去除 后续有问题可以加上
+		client.UserGameInfo.setOnline(3)   // 标记用户状态为游戏中
+
+		go handFishInit(room) //todo: 已经把锁去除 后续有问题可以加上
 		room.broadcast([]interface{}{"message", map[string]interface{}{"message": "等待其他玩家资源加载就绪"}})
 		go handRoomRun(room)
 	}
@@ -112,11 +137,16 @@ func handRoomRun(room *Room) {
 			//go handFishInit(room)      //鱼群初始化数据
 			go closeRoomTimer(room) //定义定时器关闭
 			go handFishRun(room)
-			break
+			return
 		}
+		logs.Debug("检测准备")
+		time.Sleep(time.Second * 2)
 	}
 }
+
+// 外部加锁，不能不加
 func getOrCreateRoom(roomNum int, roomLevel string) (*Room, error) {
+	logs.Debug("获取房间")
 	roomKey := roomNum
 	roomsByNum, exists := roomWait[roomKey]
 
@@ -136,24 +166,24 @@ func getOrCreateRoom(roomNum int, roomLevel string) (*Room, error) {
 			logs.Debug(message)
 			return nil, message
 		}
-		// 在创建房间时初始化 CloseChan
+		// 在创建房间时初始化 RoomChan
 		timeTick, _ := randomTicker(1, 5)
 		room = &Room{
 			ID:             roomID,
 			Name:           roomName(roomNames[roomNum]),
 			MaxPlayers:     roomNum,
 			IsClose:        false,
-			CloseChan:      make(chan bool),
+			RoomChan:       make(chan bool),
 			Players:        make(map[int]*Client),
 			robotAddTicker: timeTick,
 			PkRoomConfig:   roomConfig,
 		}
 		rooms[roomID] = room
 		roomWait[roomNum][roomLevel] = room
-
 		// 启动定时添加机器人的协程
 		go robotRun(room)
 	}
+	logs.Debug("返回房间数据")
 	return room, nil
 }
 
@@ -176,50 +206,36 @@ func closeRoomTimer(room *Room) {
 	gameProgressSendTime := time.NewTimer(time.Minute)
 	nowProgress := time.Duration(room.PkRoomConfig.DurationMin) * time.Minute
 	//监听定时器管道和手动关闭管道
-	select {
-	case <-timer.C:
-		logs.Debug("closeRoomTimer,<-timer.C")
-		room.CloseChan <- false
-	case <-room.CloseChan:
-		logs.Debug("closeRoomTimer,<-room.CloseChan")
-		timer.Stop()
-	case <-gameProgressSendTime.C:
-		nowProgress -= time.Minute
-		minutes := int(nowProgress.Minutes())
-		seconds := int(nowProgress.Seconds())
-		data := []interface{}{"timeLeft",
-			map[string]interface{}{
-				"message": "剩余时间",
-				"data": map[string]interface{}{
-					"minutes": minutes,
-					"seconds": seconds,
+	for {
+		select {
+		case <-timer.C:
+			logs.Debug("关闭RoomChan")
+			close(room.RoomChan)
+			return
+		case <-gameProgressSendTime.C:
+			nowProgress -= time.Minute
+			minutes := int(nowProgress.Minutes())
+			seconds := int(nowProgress.Seconds())
+			data := []interface{}{"timeLeft",
+				map[string]interface{}{
+					"message": "剩余时间",
+					"data": map[string]interface{}{
+						"minutes": minutes,
+						"seconds": seconds,
+					},
 				},
-			},
+			}
+			room.broadcast(data)
+		default:
 		}
-		room.broadcast(data)
 	}
+
 }
 
-// 时间范围
-// randomTicker 返回一个随机时间间隔的 Ticker
-func randomTicker(min, max time.Duration) (*time.Ticker, time.Duration) {
-	interval := time.Duration(rand.Int63n(int64(max-min))) + min*time.Second
-	ticker := time.NewTicker(interval)
-	return ticker, interval
-} // 时间范围
-// randomTicker 返回一个随机时间间隔的 Ticker
-func randomFTicker(min, max float32) (*time.Ticker, time.Duration) {
-	minDuration := time.Duration(min * float32(time.Second))
-	maxDuration := time.Duration(max * float32(time.Second))
-
-	interval := time.Duration(rand.Int63n(int64(maxDuration-minDuration))) + minDuration
-	ticker := time.NewTicker(interval)
-	return ticker, interval
-}
-
+// 房间结束
 func closeRoom(room *Room) {
-	room.mutex.Lock()
-	defer room.mutex.Unlock()
+	//room.mutex.Lock()
+	//defer room.mutex.Unlock()
 	//结算 妈的 写个统一给房间发送信息 的 方法
 	closeRoom := []interface{}{"closeRoom", map[string]interface{}{
 		"message":  "时间到",
@@ -231,15 +247,23 @@ func closeRoom(room *Room) {
 	}
 	// 发送给前端
 	room.broadcast(closeRoom)
-	close(room.CloseChan) //防止意外没有关闭
 }
 
+// 返回一个随机时间间隔的 Ticker
+func randomTicker(min, max time.Duration) (*time.Ticker, time.Duration) {
+	interval := time.Duration(rand.Int63n(int64(max-min))) + min*time.Second
+	ticker := time.NewTicker(interval)
+	return ticker, interval
+}
+
+// 广播鱼群数据
 func (room *Room) broadcastFishLocation() {
 	FishReady := []interface{}{"fishLocation", room.FishGroup}
 	// 发送给前端
 	room.broadcast(FishReady)
 }
 
+// 广播数据准备就绪消息
 func (room *Room) broadcastFishReady() {
 	FishReady := []interface{}{"message",
 		map[string]interface{}{
@@ -249,6 +273,7 @@ func (room *Room) broadcastFishReady() {
 	room.broadcast(FishReady)
 }
 
+// 自定义广播
 func (room *Room) broadcast(data []interface{}) {
 	if dataByte, err := json.Marshal(data); err != nil {
 		logs.Error("broadcast [%v] json marshal err :%v ", data, err)

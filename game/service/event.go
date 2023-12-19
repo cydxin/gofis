@@ -110,3 +110,11 @@ func handleFireBullets(reqMap map[string]interface{}, client *Client) {
 	}
 	client.Room.broadcast(FireBulletsResult)
 }
+
+func (u *UserGameInfo) setOnline(status int) {
+	data := map[string]interface{}{
+		"online_status": status,
+		"userId":        u.UserId,
+	}
+	model.SetUserOnline(data)
+}
