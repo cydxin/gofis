@@ -32,7 +32,12 @@
 <button onclick="exp()">体验场记录</button>
 <input type="number" style="width:100px;height:30px;" id="numinput" placeholder="输入场次" value="2">
 <input type="text" style="width:100px;height:30px;" id="levelinput" placeholder="输入等级 白银场" value="白银场">
-<button onclick="enter()">进入场次</button>
+<button onclick="enter()">进入PK场次</button>
+
+
+<input type="text" style="width:100px;height:30px;" id="matctinput" placeholder="输入人数 20 50 100" value="20">
+<button onclick="enterMatch()">进入比赛场次</button>
+
 <button onclick="ready()">准备ok</button><br>
 <input type="text" style="width:100px;height:30px;" id="fishid" placeholder="鱼id" value="2">
 <input type="text" style="width:100px;height:30px;" id="bullid" placeholder="炮等级" value="2">
@@ -47,6 +52,7 @@
     const phoneInput = document.getElementById('phoneInput');
     const numinput = document.getElementById('numinput');
     const levelinput = document.getElementById('levelinput');
+    const matctinput = document.getElementById('matctinput');
     const messageid = document.getElementById('messageid');
     const reid = document.getElementById('reid');
     const messageDisplay = document.getElementById('messageDisplay');
@@ -133,7 +139,22 @@
             roomLevel: roomLevel,
         };
         websocket.send( 42 + JSON.stringify(dataToSend));
-    }    // 发送消息
+    }
+    function enterMatch() {
+        let num = matctinput.value;
+        if(!num){
+            num = 1
+        }
+        const dataToSend = {
+            event: 'enterRoom',
+            roomNum: parseFloat(num),
+            roomLevel: "match",
+        };
+        websocket.send( 42 + JSON.stringify(dataToSend));
+    }
+
+
+    // 发送消息
     function ready() {
         const dataToSend = {
             event: 'ready',
