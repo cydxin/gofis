@@ -22,14 +22,16 @@ func InitDb() {
 		return
 	}
 	db = database
-
+	db.SetMaxOpenConns(20) //最大连接数
+	db.SetMaxIdleConns(10) //最大闲置数
 	initRedisGameCfg()
 	// 设置信号处理，确保在程序退出时关闭数据库连接
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-c
-		CloseDB() // 关闭数据库连接
+		<-c                 //挂起接收os关闭信号
+		SetUserOfflineAll() //挂起接收os关闭信号
+		CloseDB()           // 关闭数据库连接
 		CloseRedis()
 		os.Exit(1)
 	}()
