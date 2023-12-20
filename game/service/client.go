@@ -37,7 +37,8 @@ var upgrader = websocket.Upgrader{
 type Client struct {
 	conn         *websocket.Conn
 	UserGameInfo *UserGameInfo
-	Room         *Room
+	Room         *RoomPk
+	RoomMatch    *RoomMatch
 	inChan       chan []byte
 	outChan      chan []byte
 	IsReady      bool
@@ -48,11 +49,12 @@ type Client struct {
 
 // PlayerConfiguration 玩家配置规范
 type PlayerConfiguration struct {
-	InitScore    int     `json:"-"`        //开局积分
-	Power        float64 `json:"power"`    // 额外概率
-	HitSpeed     float32 `json:"HitSpeed"` // 发射速度
-	Room         *Room   `json:"-"`        // 房间
-	LockFishType string  `json:"-"`        // 锁定的鱼
+	InitScore    int        `json:"-"`        //开局积分
+	Power        float64    `json:"power"`    // 额外概率
+	HitSpeed     float32    `json:"HitSpeed"` // 发射速度
+	Room         *RoomPk    `json:"-"`        // 房间
+	RoomMatch    *RoomMatch `json:"-"`        // 房间
+	LockFishType string     `json:"-"`        // 锁定的鱼
 }
 
 // UserGameInfo 配置类型
@@ -93,9 +95,9 @@ func (c *Client) writePump() {
 		//close(c.closeChan)
 		//RoomMgr.RoomLock.Lock()
 		//defer RoomMgr.RoomLock.Unlock()
-		//if c.Room != nil { //客户端在房间内
-		//	if _, ok := RoomMgr.RoomsInfo[c.Room.RoomId]; ok { //房间没销毁
-		//		c.Room.ClientReqChan <- &clientReqData{c, []string{"client_exit"}}
+		//if c.RoomPk != nil { //客户端在房间内
+		//	if _, ok := RoomMgr.RoomsInfo[c.RoomPk.RoomId]; ok { //房间没销毁
+		//		c.RoomPk.ClientReqChan <- &clientReqData{c, []string{"client_exit"}}
 		//	}
 		//}
 
@@ -265,4 +267,16 @@ func (c *Client) ModelSuccess(Data interface{}) {
 	// 发送JSON数据给前端
 	c.sendMsg(responseData)
 
+}
+
+// 个人消息
+func (c *Client) broadcast(data []interface{}) {
+	if dataByte, err := json.Marshal(data); err != nil {
+		logs.Error("broadcast [%v] json marshal err :%v ", data, err)
+	} else {
+		if c.UserGameInfo.GroupId == 1 {
+			dataByte = append([]byte{'4', '2'}, dataByte...)
+			c.sendMsg(dataByte)
+		}
+	}
 }
