@@ -64,6 +64,19 @@ type PkRoomInfo struct {
 	InitScore     int     `db:"init_score" json:"init_score"`
 }
 
+// RoomMatchInfo MatchRoom Match房间配置
+type RoomMatchInfo struct {
+	Place1Reward float64 `db:"place1_reward" json:"place1_reward"`
+	Place2Reward float64 `db:"place2_reward" json:"place2_reward"`
+	Place3Reward float64 `db:"place3_reward" json:"place3_reward"`
+	RoomName     string  `db:"room_name" json:"room_name"`
+	DurationMin  int     `db:"duration_min" json:"duration_min"`
+	Ticket       float64 `db:"ticket" json:"ticket"`
+	Turret       string  `db:"turret" json:"turret"`
+	ExtWinRate   float64 `db:"ext_win_rate" json:"ext_win_rate"`
+	InitScore    int     `db:"init_score" json:"init_score"`
+}
+
 // Response 通用响应结构体
 type Response struct {
 	Status string      `json:"status"`

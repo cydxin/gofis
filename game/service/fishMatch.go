@@ -4,48 +4,11 @@ import (
 	"fmt"
 	"github.com/astaxie/beego/logs"
 	"math/rand"
-	"sync"
 	"time"
 )
 
-const maxX = 1920
-const maxY = 1080
-
-// FishKind 结构体定义
-type FishKind struct {
-	Speed int    // 鱼的速度
-	Odds  int    // 赔率
-	Name  string // 鱼的名称
-}
-
-// 先不定义kindID 直接int
-var fishKinds = map[int]FishKind{
-	0: {Speed: 110, Odds: 2, Name: "浪浪鱼"},
-	1: {Speed: 100, Odds: 2, Name: "茂泽鱼"},
-	2: {Speed: 80, Odds: 3, Name: "小兰鱼"},
-	3: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
-	4: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
-	5: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
-	6: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
-	7: {Speed: 60, Odds: 5, Name: "佳丽鱼"},
-}
-
-type FishId int
-
-type Fish struct {
-	FishId      FishId `json:"fish_id"`
-	OffsetX     int    `json:"offset_x"`  // 鱼相对于之前X的位置
-	OffsetY     int    `json:"offset_y"`  // 鱼相对于之前Y的位置
-	CurrentX    int    `json:"CurrentX"`  // 鱼当前位置x
-	CurrentY    int    `json:"CurrentY"`  // 鱼当前位置y
-	FishKind    int    `json:"fish_kind"` // 育种
-	Hit         bool   `json:"hit"`
-	ToBeDeleted bool   `json:"to_be_deleted"`
-	Mutex       sync.Mutex
-}
-
 // 房间的游戏前，或玩家加载游戏资源时就可以提前加载的方法
-func handFishInit(room *RoomPk) {
+func handMatchFishInit(room *RoomMatchSub) {
 	room.fishMutex.Lock()
 	fmt.Print("进入handFishInit \n")
 	// 初始化 FishGroup 切片
@@ -70,7 +33,7 @@ func handFishInit(room *RoomPk) {
 }
 
 // handFish run 处理鱼的运动 也是主流程
-func handFishRun(room *RoomPk) {
+func handMatchFishRun(room *RoomMatchSub) {
 	logs.Debug("鱼群开始")
 	buildNormalFishTicker := time.NewTicker(time.Second * 10)         //加普通鱼用定时器 TODO:鱼群 即奖励类鱼 圆阵 长方形的
 	flushTimeOutFishTicker := time.NewTicker(time.Second * 5)         //清理走出屏幕的鱼和被捕捉的鱼
@@ -78,31 +41,30 @@ func handFishRun(room *RoomPk) {
 	defer buildNormalFishTicker.Stop()
 	defer flushTimeOutFishTicker.Stop()
 	defer UpdateFishTracksTicker.Stop()
-	go room.handRobotRun()
+	go room.handRobotMatchRun()
 	logs.Debug("开始for select")
 	for {
 		select {
 		case msg := <-room.RoomChan:
-			logs.Debug("handFishRun,msg:%v", msg)
-			logs.Debug("handFishRun,<-room.RoomChan")
-			room.closePkRoom()
+			logs.Debug("子房间接受到管道关闭,msg:%v", msg)
+			logs.Debug("控制权外交")
 			return
 		case <-buildNormalFishTicker.C:
 			logs.Debug("handFishRun,buildNormalFishTicker")
-			addFish(room, 2)
+			addMatchFish(room, 2)
 		case <-flushTimeOutFishTicker.C:
 			logs.Debug("handFishRun,flushTimeOutFishTicker")
-			removeFish(room)
+			removeMatchFish(room)
 		case <-UpdateFishTracksTicker.C:
 			logs.Debug("handFishRun,UpdateFishTracksTicker")
-			updateFishTracks(room)
+			updateMatchFishTracks(room)
 		default:
 			//logs.Debug(room.RoomChan)
 		}
 	}
 }
 
-func updateFishTracks(room *RoomPk) {
+func updateMatchFishTracks(room *RoomMatchSub) {
 	room.mutex.Lock()
 	//printFishGroupJSON(room)
 	for _, fish := range room.FishGroup {
@@ -124,7 +86,7 @@ func updateFishTracks(room *RoomPk) {
 	return
 }
 
-func removeFish(room *RoomPk) {
+func removeMatchFish(room *RoomMatchSub) {
 	// 保留未标记为删除的元素
 	room.fishMutex.Lock()
 	defer room.fishMutex.Unlock()
@@ -134,7 +96,7 @@ func removeFish(room *RoomPk) {
 		}
 	}
 }
-func addFish(room *RoomPk, num int) {
+func addMatchFish(room *RoomMatchSub, num int) {
 	//fmt.Print("添加鱼的数据 \n")
 	room.fishMutex.Lock()
 	defer room.fishMutex.Unlock()
@@ -212,38 +174,5 @@ func addFish(room *RoomPk, num int) {
 		//	}
 		//	room.FishGroup = append(room.FishGroup, newFish)
 		//}
-	}
-}
-func (f *Fish) hitFish(bulletId BulletId) bool {
-	// 赔的分
-	f.Mutex.Lock()
-	defer f.Mutex.Unlock()
-	odds := fishKinds[f.FishKind].Odds
-	// 使用随机数范围控制捕获率
-	i := odds / int(bulletId)
-	a := rand.Intn(int(i) + 1)
-	b := 0
-	// 是否命中
-	hitCondition := a == b && !f.Hit && !f.ToBeDeleted //被别人锁定 以及
-	if hitCondition {
-		f.Hit = true
-		f.ToBeDeleted = true
-		return true
-	}
-	return false
-}
-func (c *Client) catchFish(fishId FishId, bulletId BulletId) {
-	//计算概率
-	//已使用毫秒触发尝试，同时发送不会出现都返回true，考虑到实际情况更少，不做锁处理
-	c.UserGameInfo.Score -= int(bulletId)
-	if c.Room.FishGroup[fishId].hitFish(bulletId) {
-		Score := fishKinds[c.Room.FishGroup[fishId].FishKind].Odds
-		c.UserGameInfo.Score += Score
-		catchResult := []interface{}{"catch_fish_reply",
-			map[string]interface{}{
-				"userId":   c.UserGameInfo.UserId,
-				"integral": Score,
-			}}
-		c.Room.broadcast(catchResult)
 	}
 }

@@ -69,7 +69,11 @@ func handleEnterRoom(reqMap map[string]interface{}, client *Client) {
 	}
 	// 将 float64 转换为 int
 	roomNum := int(roomNumFloat)
-	EnterRoom(roomNum, roomLevel, client)
+	if roomLevel == "match" {
+		EnterRoomMatch(roomNum, client)
+	} else {
+		EnterPkRoom(roomNum, roomLevel, client)
+	}
 }
 
 func handleReady(reqMap map[string]interface{}, client *Client) {

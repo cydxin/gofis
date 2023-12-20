@@ -3,6 +3,8 @@ package model
 import (
 	"database/sql"
 	"fmt"
+	"github.com/astaxie/beego/logs"
+	"gofish/common"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/guregu/null.v4"
 	"log"
@@ -41,6 +43,13 @@ type UserInfo struct {
 	DeletedAt              null.Time `json:"deleted_at" db:"deleted_at"`
 	CreatedAt              time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type UserCloseRoomSetData struct {
+	ID       common.UserId `db:"id"`
+	IsOnline int           `db:"online_status"`
+	PKMoney  int           `db:"pk_money"`
+	Balance  float64       `db:"balance"`
 }
 
 func GetUserByCredentials(username, password string) (*UserInfo, error) {
@@ -91,5 +100,29 @@ func SetUserOnline(u interface{}) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println("Update successful")
+}
+
+func SetUserOfflineAll() {
+	// 要更新的用户信息
+	// 执行UPDATE语句
+
+	query := "UPDATE users SET online_status = 0"
+	_, err := db.Exec(query)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Update successful")
+}
+func SetUserCloseRoomData(u []UserCloseRoomSetData) {
+	for _, user := range u {
+		query := "UPDATE users SET online_status = :online_status, pk_money = pk_money + :pk_money, balance = :balance WHERE id = :id"
+		logs.Debug(user)
+		_, err := db.NamedExec(query, user)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	fmt.Println("Update successful")
 }

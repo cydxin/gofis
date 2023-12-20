@@ -23,7 +23,7 @@ var eventHandlers = map[string]eventHandler{
 func wsRequest(req []byte, client *Client) {
 	defer func() {
 		if r := recover(); r != nil {
-			logs.Error("wsRequest panic:%v ", r)
+			logs.Error("wsRequest 错误:%v ", r)
 		}
 	}()
 
@@ -90,6 +90,7 @@ func handleLoginRequest(reqMap map[string]interface{}, client *Client) {
 		NickName:   userInfo.Nickname,
 		GroupId:    userInfo.GroupID,
 		GameConfig: PlayerConfig,
+		Balance:    userInfo.Balance,
 	}
 	client.UserGameInfo.setOnline(1)
 	client.IsReady = false

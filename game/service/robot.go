@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func robotRun(room *Room) {
+func robotRun(room *RoomPk) {
 	logs.Debug("进入机器人检测")
 	for {
 		select {
@@ -25,7 +25,7 @@ func robotRun(room *Room) {
 			}
 			logs.Debug("机器人添加")
 			room.robotAddTicker.Stop()
-			room.robotAddTicker, _ = randomTicker(30, 60)
+			room.robotAddTicker, _ = randomTicker(3, 6)
 			room.mutex.Unlock()
 			addRobotToRoom(room)
 			if room.MaxPlayers == len(room.Players) {
@@ -41,21 +41,26 @@ func robotRun(room *Room) {
 }
 
 // 添加机器人到房间
-func addRobotToRoom(room *Room) {
-	robotClient := &Client{
-		UserGameInfo: generateRobotUserInfo(),
-		Room:         room,
+func addRobotToRoom(room *RoomPk) {
+	UserGameInfo, err := generateRobotUserInfo()
+	if err == nil {
+		robotClient := &Client{
+			UserGameInfo: UserGameInfo,
+			Room:         room,
+		}
+		// 调用 EnterPkRoom 函数将机器人加入房间
+		EnterPkRoom(room.MaxPlayers, room.RoomConfig.RoomName, robotClient)
 	}
-	// 调用 EnterRoom 函数将机器人加入房间
-	EnterRoom(room.MaxPlayers, room.PkRoomConfig.RoomName, robotClient)
+
 }
 
 // 生成机器人用户信息
-func generateRobotUserInfo() *UserGameInfo {
+func generateRobotUserInfo() (*UserGameInfo, error) {
 	// 实现根据需要生成机器人用户信息的逻辑
 	userInfo, err := model.GetUserByRobot()
 	if err != nil {
-		logs.Error("generateRobotUserInfo-err %v", err)
+		logs.Error("提供机器人错误 %v", err)
+		return nil, err
 	}
 
 	return &UserGameInfo{
@@ -70,11 +75,11 @@ func generateRobotUserInfo() *UserGameInfo {
 		NickName:    userInfo.Nickname,
 		Online:      1,
 		Client:      nil,
-	}
+	}, nil
 }
 
 // 机器人的操作配置
-func (room *Room) handRobotRun() {
+func (room *RoomPk) handRobotRun() {
 	//判断是否有机器人 有的话进行机器人操作
 	robList := make([]*UserGameInfo, 0)
 	for _, client := range room.Players {
@@ -122,7 +127,7 @@ func (room *Room) handRobotRun() {
 
 // /机器人的动作
 func performRobotAction(robot *UserGameInfo) {
-	//robot.GameConfig.Room.FishGroup
+	//robot.GameConfig.RoomPk.FishGroup
 	//射速 * 此次时间 等于需要循环的次数
 	//shot := time.NewTicker(time.Second * )
 	var bulletStartingPoint string

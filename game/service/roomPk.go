@@ -7,17 +7,18 @@ import (
 	"gofish/common"
 	"gofish/model"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 )
 
-var nextRoomID int
+var nextPkRoomID int
 
-type roomName string
+type roomPkName string
 
-var rooms = make(map[int]*Room)
-var roomWait = make(map[int]map[string]*Room)
-var roomNames = map[int]string{
+var roomsPk = make(map[int]*RoomPk)
+var roomPkWait = make(map[int]map[string]*RoomPk)
+var roomPkNames = map[int]string{
 	1: "体验场",
 	2: "2人PK场",
 	3: "3人PK场",
@@ -25,12 +26,12 @@ var roomNames = map[int]string{
 	5: "5人PK场",
 	6: "6人PK场",
 }
-var roomMutex sync.Mutex
+var roomPkMutex sync.Mutex
 
-// Room 结构体定义
-type Room struct {
+// RoomPk 结构体定义
+type RoomPk struct {
 	ID              int
-	Name            roomName
+	Name            roomPkName
 	Status          int //房间的状态
 	MaxPlayers      int
 	AllPlayersReady bool
@@ -42,7 +43,8 @@ type Room struct {
 	MaxOdsFishId    FishId
 	NextOdsFishId   FishId
 	robotAddTicker  *time.Ticker
-	PkRoomConfig    *common.PkRoomInfo
+	RoomConfig      *common.PkRoomInfo
+	Type            string
 	maxFishIdOds    FishId //鱼最大赔率 共享给全部机器人
 	nextFishIdOds   FishId //鱼次大赔率 共享给全部机器人
 	randFishIdOds   FishId //鱼随机赔率 共享给全部机器人
@@ -50,19 +52,23 @@ type Room struct {
 	fishMutex       sync.Mutex
 }
 
-// EnterRoom 进入房间逻辑
-func EnterRoom(roomNum int, roomLevel string, client *Client) {
+func (room *RoomPk) handFishInit() {
+
+}
+
+// EnterPkRoom 进入房间逻辑
+func EnterPkRoom(roomNum int, roomLevel string, client *Client) {
 	//使用roomMutex 确保getOrCreateRoom的唯一性即 获取房间时的并发是安全的
-	roomMutex.Lock()
-	var room *Room // 声明一个 Room 指针
+	roomPkMutex.Lock()
+	var room *RoomPk // 声明一个 RoomPk 指针
 	if client.Room != nil {
 		logs.Debug("机器人进入房间")
 		room = client.Room
 	} else {
 		//获取等待中的房间
-		r, err := getOrCreateRoom(roomNum, roomLevel)
+		r, err := getOrCreatePkRoom(roomNum, roomLevel)
 		if err != nil {
-			roomMutex.Unlock()
+			roomPkMutex.Unlock()
 			errorMsg := err.Error()
 			marshal, _ := json.Marshal([]interface{}{"err", map[string]interface{}{"message": errorMsg}})
 			client.sendMsg(marshal)
@@ -71,9 +77,10 @@ func EnterRoom(roomNum int, roomLevel string, client *Client) {
 		room = r
 	}
 
-	logs.Debug("roomMutex.Unlock()")
-	roomMutex.Unlock()
+	logs.Debug("roomPkMutex.Unlock()")
+	roomPkMutex.Unlock()
 	logs.Debug("room.mutex.Lock()")
+	logs.Debug(room)
 	room.mutex.Lock()
 	defer func() {
 		room.mutex.Unlock()
@@ -86,12 +93,13 @@ func EnterRoom(roomNum int, roomLevel string, client *Client) {
 	client.Room = room
 	client.UserGameInfo.Client = client
 	client.UserGameInfo.SeatIndex = len(room.Players)
-	client.UserGameInfo.Score = room.PkRoomConfig.InitScore
+	client.UserGameInfo.Score = room.RoomConfig.InitScore
 	logs.Debug("初始配置数据 优先机器人使用")
 
 	//初始配置数据 优先机器人使用
+	client.UserGameInfo.Score = room.RoomConfig.InitScore
 	client.UserGameInfo.GameConfig = &PlayerConfiguration{
-		InitScore: room.PkRoomConfig.InitScore,
+		InitScore: room.RoomConfig.InitScore, //初始积分
 		Power:     1,
 		Room:      room,
 	}
@@ -105,20 +113,22 @@ func EnterRoom(roomNum int, roomLevel string, client *Client) {
 	if len(room.Players) == roomNum { // 人满了 开始游戏！！！
 		logs.Debug("人满了")
 		room.robotAddTicker.Stop()
-		roomWait[roomNum][roomLevel] = nil // 弹出此等待的房间
-		room.Status = 1                    // 标记为游戏中状态
-		client.UserGameInfo.setOnline(3)   // 标记用户状态为游戏中
+		roomPkWait[roomNum][roomLevel] = nil // 弹出此等待的房间
+		room.Status = 1                      // 标记为游戏中状态
+		client.UserGameInfo.setOnline(3)     // 标记用户状态为游戏中
 
 		go handFishInit(room) //todo: 已经把锁去除 后续有问题可以加上
 		room.broadcast([]interface{}{"message", map[string]interface{}{"message": "等待其他玩家资源加载就绪"}})
-		go handRoomRun(room)
+		go handPkRoomRun(room)
 	}
 }
-func handRoomRun(room *Room) {
+
+func handPkRoomRun(room *RoomPk) {
 	room.mutex.Lock()
 	defer room.mutex.Unlock()
 	// 需要让玩家发送一个ready表示可以开始加载数据  todo:改为chan传输 不做循环处理
 	logs.Debug("检测玩家准备中")
+	logs.Debug(room.AllPlayersReady)
 	for !room.AllPlayersReady {
 		allReady := true
 		for _, client := range room.Players {
@@ -130,12 +140,13 @@ func handRoomRun(room *Room) {
 			}
 		}
 		if allReady {
+			logs.Debug("玩家都就绪")
 			// 发送给前端
 			room.broadcast([]interface{}{"message", map[string]interface{}{"message": "开始推送"}})
 			room.AllPlayersReady = allReady
 			//开始鱼数据实时状态和数据的发送
 			//go handFishInit(room)      //鱼群初始化数据
-			go closeRoomTimer(room) //定义定时器关闭
+			go closePkRoomTimer(room) //定义定时器关闭
 			go handFishRun(room)
 			return
 		}
@@ -145,22 +156,22 @@ func handRoomRun(room *Room) {
 }
 
 // 外部加锁，不能不加
-func getOrCreateRoom(roomNum int, roomLevel string) (*Room, error) {
+func getOrCreatePkRoom(roomNum int, roomLevel string) (*RoomPk, error) {
 	logs.Debug("获取房间")
 	roomKey := roomNum
-	roomsByNum, exists := roomWait[roomKey]
+	roomsByNum, exists := roomPkWait[roomKey]
 
 	if !exists {
-		roomsByNum = make(map[string]*Room)
-		roomWait[roomKey] = roomsByNum
+		roomsByNum = make(map[string]*RoomPk)
+		roomPkWait[roomKey] = roomsByNum
 	}
 
 	room, exists := roomsByNum[roomLevel]
-	if !exists {
-		nextRoomID++
-		roomID := nextRoomID
+	if !exists || room == nil {
+		nextPkRoomID++
+		roomID := nextPkRoomID
 		//获取房间的配置
-		roomConfig := getRoomConfig(roomNum, roomLevel)
+		roomConfig := getRoomPkConfig(roomNum, roomLevel)
 		if roomConfig == nil {
 			message := fmt.Errorf("不存在的的房间或房间已关闭")
 			logs.Debug(message)
@@ -168,18 +179,19 @@ func getOrCreateRoom(roomNum int, roomLevel string) (*Room, error) {
 		}
 		// 在创建房间时初始化 RoomChan
 		timeTick, _ := randomTicker(1, 5)
-		room = &Room{
+		room = &RoomPk{
 			ID:             roomID,
-			Name:           roomName(roomNames[roomNum]),
+			Name:           roomPkName(roomPkNames[roomNum]),
 			MaxPlayers:     roomNum,
 			IsClose:        false,
 			RoomChan:       make(chan bool),
 			Players:        make(map[int]*Client),
 			robotAddTicker: timeTick,
-			PkRoomConfig:   roomConfig,
+			RoomConfig:     roomConfig,
+			Type:           "Pk",
 		}
-		rooms[roomID] = room
-		roomWait[roomNum][roomLevel] = room
+		roomsPk[roomID] = room
+		roomPkWait[roomNum][roomLevel] = room
 		// 启动定时添加机器人的协程
 		go robotRun(room)
 	}
@@ -187,7 +199,7 @@ func getOrCreateRoom(roomNum int, roomLevel string) (*Room, error) {
 	return room, nil
 }
 
-func getRoomConfig(num int, name string) *common.PkRoomInfo {
+func getRoomPkConfig(num int, name string) *common.PkRoomInfo {
 	roomConfig, err := model.GetConfigFromRedis(num, name)
 	if err != nil {
 		return nil
@@ -197,14 +209,14 @@ func getRoomConfig(num int, name string) *common.PkRoomInfo {
 
 }
 
-func closeRoomTimer(room *Room) {
+func closePkRoomTimer(room *RoomPk) {
 	fmt.Print("定时器开始了 \n")
 	//定时器
-	timer := time.NewTimer(time.Duration(room.PkRoomConfig.DurationMin) * time.Second)
-	val := time.Duration(room.PkRoomConfig.DurationMin) * time.Minute
+	timer := time.NewTimer(time.Duration(room.RoomConfig.DurationMin) * time.Second)
+	val := time.Duration(room.RoomConfig.DurationMin) * time.Minute
 	logs.Debug("房间定时val %v", val)
 	gameProgressSendTime := time.NewTimer(time.Minute)
-	nowProgress := time.Duration(room.PkRoomConfig.DurationMin) * time.Minute
+	nowProgress := time.Duration(room.RoomConfig.DurationMin) * time.Minute
 	//监听定时器管道和手动关闭管道
 	for {
 		select {
@@ -233,20 +245,54 @@ func closeRoomTimer(room *Room) {
 }
 
 // 房间结束
-func closeRoom(room *Room) {
-	//room.mutex.Lock()
-	//defer room.mutex.Unlock()
-	//结算 妈的 写个统一给房间发送信息 的 方法
-	closeRoom := []interface{}{"closeRoom", map[string]interface{}{
-		"message":  "时间到",
-		"integral": "10000分",
-		"rank":     "第一名",
-	}}
-	for _, client := range room.Players {
-		client.IsReady = false
+func (room *RoomPk) closePkRoom() {
+	// 对所有玩家按照积分进行排序
+	var players []*Client
+	for _, player := range room.Players {
+		players = append(players, player)
 	}
-	// 发送给前端
-	room.broadcast(closeRoom)
+
+	sort.Slice(players, func(i, j int) bool {
+		return players[i].UserGameInfo.Score > players[j].UserGameInfo.Score
+	})
+	//用户修改数据
+	var usersToUpdate []model.UserCloseRoomSetData
+	//room.AllPlayersReady = false
+	var balanceAdd int
+	for i, client := range players {
+		// 确定名次信息
+		rankString := fmt.Sprintf("第%d名", i+1)
+		// 计算获得积分
+		score := fmt.Sprintf("无奖励")
+		balanceAdd = 0
+
+		if i == 0 {
+			logs.Debug(client.UserGameInfo.Balance)
+			client.UserGameInfo.Balance += room.RoomConfig.Money
+			logs.Debug(client.UserGameInfo.Balance)
+			score = fmt.Sprintf("奖励积分：%v", room.RoomConfig.Money)
+			balanceAdd = int(room.RoomConfig.Money)
+		}
+		// 发送结算信息
+		closeRoom := []interface{}{"closePkRoom", map[string]interface{}{
+			"message": "时间结束",
+			"score":   score, // 更新后的积分
+			"rank":    rankString,
+		}}
+
+		data := model.UserCloseRoomSetData{
+			ID:       client.UserGameInfo.UserId,
+			IsOnline: 1,
+			PKMoney:  balanceAdd,
+			Balance:  client.UserGameInfo.Balance,
+		}
+		client.UserGameInfo.Online = 1
+		usersToUpdate = append(usersToUpdate, data)
+		client.IsReady = false
+		client.broadcast(closeRoom)
+		client.Room = nil
+	}
+	model.SetUserCloseRoomData(usersToUpdate)
 }
 
 // 返回一个随机时间间隔的 Ticker
@@ -257,14 +303,14 @@ func randomTicker(min, max time.Duration) (*time.Ticker, time.Duration) {
 }
 
 // 广播鱼群数据
-func (room *Room) broadcastFishLocation() {
+func (room *RoomPk) broadcastFishLocation() {
 	FishReady := []interface{}{"fishLocation", room.FishGroup}
 	// 发送给前端
 	room.broadcast(FishReady)
 }
 
 // 广播数据准备就绪消息
-func (room *Room) broadcastFishReady() {
+func (room *RoomPk) broadcastFishReady() {
 	FishReady := []interface{}{"message",
 		map[string]interface{}{
 			"message": "鱼群就绪",
@@ -274,7 +320,7 @@ func (room *Room) broadcastFishReady() {
 }
 
 // 自定义广播
-func (room *Room) broadcast(data []interface{}) {
+func (room *RoomPk) broadcast(data []interface{}) {
 	if dataByte, err := json.Marshal(data); err != nil {
 		logs.Error("broadcast [%v] json marshal err :%v ", data, err)
 	} else {
