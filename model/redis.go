@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/astaxie/beego/logs"
@@ -9,6 +10,7 @@ import (
 	"gofish/game/gcommon"
 	"log"
 	"os"
+	"time"
 )
 
 var redisGameCfg *redis.Client
@@ -18,7 +20,16 @@ func initRedisGameCfg() {
 		Addr:     gcommon.GameConf.RedisGameCfgAddr,
 		Password: gcommon.GameConf.RedisGameCfgPass,
 		DB:       0,
+		PoolSize: 50, //先20个连接池
 	})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10) //创建十秒的上下文
+	defer cancel()
+	_, err := redisGameCfg.Ping(ctx).Result() // 检查连接redis是否成功
+	if err != nil {
+		fmt.Printf("redis连接错误: %v \n", err)
+		panic(err)
+	}
+
 	GameCfg, err := GetPkRoom()
 	if err != nil {
 		logs.Error("redis GameCfg读取mysql数据异常 err：%v", err)

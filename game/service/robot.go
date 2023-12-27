@@ -136,7 +136,7 @@ func performRobotAction(robot *UserGameInfo) {
 	ranDomTimes := rand.Intn(5) + 3
 	hitNum := 0
 	select {
-	case <-robot.GameConfig.Room.RoomChan:
+	case <-robot.GameConfig.RoomPk.RoomChan:
 		return
 	default:
 		hitSpeed := robot.GameConfig.HitSpeed
@@ -146,7 +146,7 @@ func performRobotAction(robot *UserGameInfo) {
 			hitNum = 0
 			switchLockFish(robot)
 		}
-		for _, fish := range robot.GameConfig.Room.FishGroup { //todo:随机一下 暂时不实装按鱼的赔率
+		for _, fish := range robot.GameConfig.RoomPk.FishGroup { //todo:随机一下 暂时不实装按鱼的赔率
 			if !fish.ToBeDeleted {
 				bulletStartingPoint = "0,100"
 				bulletEndPoint = fmt.Sprintf("%d,%d", fish.CurrentX, fish.CurrentY)
@@ -160,7 +160,7 @@ func performRobotAction(robot *UserGameInfo) {
 				"bulletEndPoint":      bulletEndPoint,
 			},
 		}
-		robot.GameConfig.Room.broadcast(FireBulletsMess)
+		robot.GameConfig.RoomPk.broadcast(FireBulletsMess)
 		floatHitSpeed := 1 / hitSpeed * float32(time.Second)
 		time.Sleep(time.Duration(floatHitSpeed))
 	}
@@ -230,5 +230,10 @@ func switchTurret(robot *UserGameInfo, switchTurretTimer *time.Ticker) {
 			"bullet_level": robot.BulletLevel,
 		},
 	}
-	robot.GameConfig.Room.broadcast(switchTurretResult)
+	if robot.GameConfig.RoomPk != nil {
+		robot.GameConfig.RoomPk.broadcast(switchTurretResult)
+	} else {
+		robot.GameConfig.RoomMatch.broadcast(switchTurretResult)
+
+	}
 }

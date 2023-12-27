@@ -101,7 +101,7 @@ func EnterPkRoom(roomNum int, roomLevel string, client *Client) {
 	client.UserGameInfo.GameConfig = &PlayerConfiguration{
 		InitScore: room.RoomConfig.InitScore, //初始积分
 		Power:     1,
-		Room:      room,
+		RoomPk:    room,
 	}
 
 	logs.Debug("标记用户状态为房间中")

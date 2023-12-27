@@ -102,6 +102,7 @@ func handleFireBullets(reqMap map[string]interface{}, client *Client) {
 	bulletEndPoint := reqMap["bulletEndPoint"].(string)           //子弹终点 xy
 	if !errBulletId {
 		fmt.Printf("错误参数:\n errBulletId:%v ; errStartingPoint:%v ; errEndPoint:%v \n", errBulletId, bulletStartingPoint, bulletEndPoint)
+		return
 	}
 	bulletId := BulletId(bulletIdFloat64)
 	FireBulletsResult := []interface{}{"fire_bullets",
@@ -112,7 +113,11 @@ func handleFireBullets(reqMap map[string]interface{}, client *Client) {
 			"bulletEndPoint":      bulletEndPoint,
 		},
 	}
-	client.Room.broadcast(FireBulletsResult)
+	if client.Room != nil {
+		client.Room.broadcast(FireBulletsResult)
+	} else {
+		client.RoomMatch.broadcast(FireBulletsResult)
+	}
 }
 
 func (u *UserGameInfo) setOnline(status int) {

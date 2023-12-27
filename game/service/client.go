@@ -52,7 +52,7 @@ type PlayerConfiguration struct {
 	InitScore    int        `json:"-"`        //开局积分
 	Power        float64    `json:"power"`    // 额外概率
 	HitSpeed     float32    `json:"HitSpeed"` // 发射速度
-	Room         *RoomPk    `json:"-"`        // 房间
+	RoomPk       *RoomPk    `json:"-"`        // 房间
 	RoomMatch    *RoomMatch `json:"-"`        // 房间
 	LockFishType string     `json:"-"`        // 锁定的鱼
 }
